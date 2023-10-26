@@ -242,6 +242,9 @@ tokens_for_text("Time flies like an arrow. Fruit flies like a banana.")
 # %%
 with open('./README.md', 'r') as file:
     intro_markdown = file.read()
+    position = intro_markdown.find("# Token")
+    if position != -1:
+        intro_markdown = intro_markdown[position:]
 # %%
 # %%blocks
 
