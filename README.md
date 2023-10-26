@@ -51,5 +51,6 @@ This observation suggests that later token encodings might not be firmly linked 
 - **Models**: Exploring other models like GPT-2 (especially with the causal attention mask disabled) might be useful.
 - **Visualization**: Implementing visual tools like t-SNE or PCA maps might demystify the perceived noise in token encodings.
 - **Comparisons**: While it doesn't make as much obvious sense as comparing post-attention encodings to value encodings, comparing them with key or query vocabulary encodings could be interesting.
-
+  **Attention Weights**: Displaying the attention weights for the token at each head could be interesting. That's largely a UI problem, as there are already a not-insignificant number of words and numbers on the page.
+  
 Any feedback welcome! Feel free to get in touch at [encodings@danavery.com](mailto:encodings@danavery.com)!
