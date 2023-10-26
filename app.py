@@ -245,6 +245,7 @@ with open('./README.md', 'r') as file:
     position = intro_markdown.find("# Token")
     if position != -1:
         intro_markdown = intro_markdown[position:]
+
 # %%
 # %%blocks
 
@@ -276,7 +277,7 @@ with gr.Blocks(css=custom_css) as demo:
             scale=0,
         )
     with gr.Row():
-        show_tokens = gr.Button("Get Tokens", elem_classes="get-tokens", size="sm", scale=0)
+        show_tokens = gr.Button("Tokenize", elem_classes="get-tokens", size="sm", scale=0)
         tokens = gr.Dataset(
             components=["text"],
             samples = tokens_for_text(initial_text),
@@ -285,7 +286,7 @@ with gr.Blocks(css=custom_css) as demo:
             scale=5,
             samples_per_page=1000,
         )
-        selected_token_str = gr.Textbox(label="selected_token", show_label=True, scale=0)
+        selected_token_str = gr.Textbox(label="Selected Token", show_label=True, scale=0)
 
     with gr.Row():
         combined_dataframe = gr.DataFrame(
