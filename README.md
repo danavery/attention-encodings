@@ -32,7 +32,7 @@ This quick experiment offers an exploratory look into the transformation of indi
 - For the specified token:
     * If "Use positional embeddings" is selected, the corresponding positional embedding is added to all vocabulary embeddings. Since adding positional embeddings causes significant changes to the original token embedding, it seems best to add the selected token's positional embedding to the entire vocabulary, but the option is provided to skip this step.
     * The resulting vocabulary encodings are then projected into the transformer's Value space at the input layer.
-    * By comparing the post-attention encoding against this set, the tokens corresponding to the "closest" token embeddings are showcased.
+    * By comparing the post-attention encoding against this set, the tokens corresponding to the "closest" token embeddings are displayed.
     * This procedure is replicated for each attention head.
 
 ## Why RoBERTa?
