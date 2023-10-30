@@ -275,7 +275,7 @@ with gr.Blocks(css=custom_css) as demo:
 
     with gr.Row():
         combined_dataframe = gr.DataFrame(
-            label=f"Nearest initial value encodings with distance, with positional embedding included",
+            label=f"Nearest initial token value encodings (with distance)",
             show_label=True,
             elem_classes="combined",
             col_count=12,
