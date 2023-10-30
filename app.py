@@ -23,16 +23,29 @@ class RobertaTransformer:
         self.positional_embeddings = self.model.embeddings.position_embeddings.weight
 
     def create_positional_embeddings(self, selected_token):
+        self.layer_norm = self.model.embeddings.LayerNorm
+
+        self.normalized_word_embeddings_without_position = self.layer_norm(
+            self.all_word_embeddings
+        )
+
         self.all_word_embeddings_with_position = (
             self.all_word_embeddings
             + self.positional_embeddings[
                 selected_token + self.positional_embedding_offset
             ]
         )
-        self.layer_norm = self.model.embeddings.LayerNorm
         self.normalized_word_embeddings_with_position = self.layer_norm(
             self.all_word_embeddings_with_position
         )
+
+
+
+        if debug:
+            print(selected_token)
+            print(f"{self.all_word_embeddings[selected_token][:5]=}")
+            print(f"{self.positional_embeddings[selected_token + self.positional_embedding_offset][:5]=}")
+            print(f"{self.all_word_embeddings_with_position[selected_token][:5]=}")
 
     def get_all_encodings_from_weight(self, embeddings, kqv_weights):
         # compute kqv encodings for all words
@@ -49,34 +62,6 @@ class RobertaTransformer:
     def get_selected_layer_value_weights(self, selected_layer):
         return self.model.encoder.layer[selected_layer].attention.self.value.weight
 
-    def get_selected_layer_key_weights(self, selected_layer):
-        return self.model.encoder.layer[selected_layer].attention.self.key.weight
-
-    def get_selected_layer_query_weights(self, selected_layer):
-        return self.model.encoder.layer[selected_layer].attention.self.query.weight
-
-    def get_attention_weights(
-        self, outputs, selected_layer, selected_head, selected_token
-    ):
-        """
-        Extracts and returns attention weights for a specific layer, head, and token.
-
-        Parameters:
-            outputs: Transformer model outputs, which include attentions.
-            selected_layer (int): The index of the layer from which to extract the attention weights.
-            selected_head (int): The index of the head from which to extract the attention weights.
-            selected_token (int): The index of the token for which to extract the attention weights.
-
-        Returns:
-            torch.Tensor: Attention weights for the specified layer, head, and token.]
-
-            Really a static method, but leaving it like this for now.
-        """
-        attentions_l_h_t = outputs.attentions[selected_layer][
-            :, selected_head, selected_token, :
-        ]
-        return attentions_l_h_t
-
     def get_attention_weights_all_heads(
         self, outputs, selected_layer, selected_token
     ):
@@ -86,7 +71,6 @@ class RobertaTransformer:
         Parameters:
             outputs: Transformer model outputs, which include attentions.
             selected_layer (int): The index of the layer from which to extract the attention weights.
-            selected_head (int): The index of the head from which to extract the attention weights.
             selected_token (int): The index of the token for which to extract the attention weights.
 
         Returns:
@@ -97,18 +81,26 @@ class RobertaTransformer:
         attentions_l_t = outputs.attentions[selected_layer][
             :, :, selected_token, :
         ]
+        if debug: print(f"{attentions_l_t[:, 0, :]=}")
+        if debug: print(f"{torch.sum(attentions_l_t[:, 0, :])=}")
         return attentions_l_t
 
 # %%
-def get_all_layer_0_value_encodings(transformer):
+def get_all_layer_0_value_encodings(transformer, use_positional=True):
     layer_0_value_weights = transformer.get_selected_layer_value_weights(0)
 
-    # V_single_position has all tokens' value encodings using _selected_token's position_ for comparison to attention-weighted output encodings
+    if use_positional:
+        # V_single_position has all tokens' value encodings using _selected_token's position_ for comparison to attention-weighted output encodings
 
-    V_all_layer_0 = transformer.get_all_encodings_from_weight(
-        transformer.normalized_word_embeddings_with_position,
-        layer_0_value_weights,
-    )
+        V_all_layer_0 = transformer.get_all_encodings_from_weight(
+            transformer.normalized_word_embeddings_with_position,
+            layer_0_value_weights,
+        )
+    else:
+        V_all_layer_0 = transformer.get_all_encodings_from_weight(
+            transformer.normalized_word_embeddings_without_position,
+            layer_0_value_weights,
+        )
     return {"V_all_layer_0": V_all_layer_0}
 
 
@@ -119,12 +111,14 @@ def get_intermediate_output(transformer, selected_layer, selected_token, outputs
         selected_layer
     )
     if debug: print(f"{selected_layer_value_weights.shape=}")
+    # if debug: print(f"{selected_layer_value_weights[selected_token]=}")
 
     # <batch_size, seq_len, hidden_size>, the input for selected_layer
     layer_sequence_inputs = outputs.hidden_states[
         selected_layer
     ]  # actual input embeddings (not all-same-position-encoded)
     if debug: print(f"{layer_sequence_inputs.shape=}") # [1, 8, 768]
+    if debug: print(f"{layer_sequence_inputs[:, selected_token, :5]=}")
 
     # mutiply input encodings by value weights to get value encodings
     # so values for all tokens, all heads
@@ -189,9 +183,10 @@ transformer = RobertaTransformer()
 
 def closest_to_all_values(
     text="Time flies like an arrow.",
-    selected_token=5,
+    selected_token=2,
     selected_layer=0,
-    distance_type="Euclidean"
+    distance_type="Euclidean",
+    use_positional=True,
 ):
     if debug: print(f"{selected_token=}")
     if not selected_token: selected_token=1
@@ -206,7 +201,7 @@ def closest_to_all_values(
 
     outputs = transformer.model(**inputs)
 
-    layer_0_value_encodings = get_all_layer_0_value_encodings(transformer)
+    layer_0_value_encodings = get_all_layer_0_value_encodings(transformer, use_positional=use_positional)
 
     post_attention_encoding = get_intermediate_output(
         transformer, selected_layer, selected_token, outputs
@@ -276,6 +271,12 @@ with gr.Blocks(css=custom_css) as demo:
             value="Euclidean",
             scale=0,
         )
+        use_positional = gr.Checkbox(
+            label="Use positional embeddings",
+            show_label=True,
+            value=True,
+            scale=0,
+        )
     with gr.Row():
         show_tokens = gr.Button("Tokenize", elem_classes="get-tokens", size="sm", scale=0)
         tokens = gr.Dataset(
@@ -298,23 +299,29 @@ with gr.Blocks(css=custom_css) as demo:
         )
     tokens.click(
         closest_to_all_values,
-        [text, tokens, selected_layer],
+        [text, tokens, selected_layer, distance_type, use_positional],
         [selected_token_str, combined_dataframe],
     )
     selected_layer.change(
         closest_to_all_values,
-        [text, tokens, selected_layer, distance_type],
+        [text, tokens, selected_layer, distance_type, use_positional],
         [selected_token_str, combined_dataframe],
     )
     distance_type.change(
         closest_to_all_values,
-        [text, tokens, selected_layer, distance_type],
+        [text, tokens, selected_layer, distance_type, use_positional],
+        [selected_token_str, combined_dataframe],
+    )
+    use_positional.change(
+        closest_to_all_values,
+        [text, tokens, selected_layer, distance_type, use_positional],
         [selected_token_str, combined_dataframe],
     )
     show_tokens.click(tokens_for_text, [text], [tokens])
     text.submit(tokens_for_text, [text], [tokens])
 
     gr.Markdown(intro_markdown)
+
 demo.launch()
 # %%
 
