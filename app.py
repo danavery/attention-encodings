@@ -21,14 +21,13 @@ class RobertaTransformer:
         self.head_size = self.config.hidden_size // self.config.num_attention_heads
         self.all_word_embeddings = self.model.embeddings.word_embeddings.weight.data
         self.positional_embeddings = self.model.embeddings.position_embeddings.weight
-
-    def create_positional_embeddings(self, selected_token):
         self.layer_norm = self.model.embeddings.LayerNorm
-
         self.normalized_word_embeddings_without_position = self.layer_norm(
             self.all_word_embeddings
         )
 
+
+    def create_positional_embeddings(self, selected_token):
         self.all_word_embeddings_with_position = (
             self.all_word_embeddings
             + self.positional_embeddings[
@@ -38,8 +37,6 @@ class RobertaTransformer:
         self.normalized_word_embeddings_with_position = self.layer_norm(
             self.all_word_embeddings_with_position
         )
-
-
 
         if debug:
             print(selected_token)
@@ -65,19 +62,6 @@ class RobertaTransformer:
     def get_attention_weights_all_heads(
         self, outputs, selected_layer, selected_token
     ):
-        """
-        Extracts and returns attention weights for a specific layer, head, and token.
-
-        Parameters:
-            outputs: Transformer model outputs, which include attentions.
-            selected_layer (int): The index of the layer from which to extract the attention weights.
-            selected_token (int): The index of the token for which to extract the attention weights.
-
-        Returns:
-            torch.Tensor: Attention weights for the specified layer, head, and token.]
-
-            Really a static method, but leaving it like this for now.
-        """
         attentions_l_t = outputs.attentions[selected_layer][
             :, :, selected_token, :
         ]
@@ -321,7 +305,6 @@ with gr.Blocks(css=custom_css) as demo:
     text.submit(tokens_for_text, [text], [tokens])
 
     gr.Markdown(intro_markdown)
-
 demo.launch()
 # %%
 
