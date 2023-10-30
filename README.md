@@ -37,7 +37,7 @@ This quick experiment offers an exploratory look into the transformation of indi
 
 ## Why RoBERTa?
 
-RoBERTa was chosen due to its encoder-based architecture. Additionally, avoiding BERT's segment embeddings seemed helpful.
+RoBERTa was chosen due to its encoder-based architecture. Additionally, avoiding BERT's segment embeddings seemed helpful. The pre-trained weights are from the "roberta-base" Hugging Face model.
 
 ## Interpretation
 
@@ -45,7 +45,7 @@ Descriptions of the transformer architecture typically assume that later token e
 Initial expectations were that higher-level encodings might correlate to some broad, interpretable concepts.
 However, many seem to be simply noise--try any token at layer 11.
 
-Intriguingly, the first layer often creates new token encodings that are closer to **another token in the sequence** than to the original token.
+Intriguingly, the first layer often creates new token encodings that are closer to **another token in the sequence** than to the original token. Note that in "Time flies like an arrow, fruit flies like a banana," using cosine distance, the token "Time" comes out of the attention weighting closer to "flies" than to any other vocabulary token in four of the twelve heads, and comparatively far away from its original encoding.
 
 ## Personal Thoughts
 
