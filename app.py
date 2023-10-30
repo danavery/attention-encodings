@@ -281,35 +281,17 @@ with gr.Blocks(css=custom_css) as demo:
             col_count=12,
             headers=[[f"head {head}"] for head in range(12)]
         )
-    tokens.click(
-        closest_to_all_values,
+    display_values = (closest_to_all_values,
         [text, tokens, selected_layer, distance_type, use_positional],
-        [selected_token_str, combined_dataframe],
-    )
-    selected_layer.change(
-        closest_to_all_values,
-        [text, tokens, selected_layer, distance_type, use_positional],
-        [selected_token_str, combined_dataframe],
-    )
-    distance_type.change(
-        closest_to_all_values,
-        [text, tokens, selected_layer, distance_type, use_positional],
-        [selected_token_str, combined_dataframe],
-    )
-    use_positional.change(
-        closest_to_all_values,
-        [text, tokens, selected_layer, distance_type, use_positional],
-        [selected_token_str, combined_dataframe],
-    )
-    show_tokens.click(tokens_for_text, [text], [tokens])
-    text.submit(tokens_for_text, [text], [tokens])
+        [selected_token_str, combined_dataframe])
+    tokens.click(*display_values)
+    selected_layer.change(*display_values)
+    distance_type.change(*display_values)
+    use_positional.change(*display_values)
+
+    display_tokens = (tokens_for_text, [text], [tokens])
+    show_tokens.click(*display_tokens)
+    text.submit(*display_tokens)
 
     gr.Markdown(intro_markdown)
 demo.launch()
-# %%
-
-
-# %%
-
-
-
