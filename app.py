@@ -85,7 +85,7 @@ class RobertaTransformer:
                 self.normalized_word_embeddings_without_position,
                 layer_0_value_weights,
             )
-        return {"V_all_layer_0": V_all_layer_0}
+        return V_all_layer_0
 
     def tokens_for_text(self, text):
         inputs = self.tokenizer(text, return_tensors="pt", truncation=True)
@@ -138,7 +138,9 @@ class RobertaTransformer:
             self.head_size,
         )
         if debug:
-            print(f"{encodings_for_single_token_all_heads.shape=}")  # (([1, 8, 12, 64]))
+            print(
+                f"{encodings_for_single_token_all_heads.shape=}"
+            )  # (([1, 8, 12, 64]))
 
         post_attn_layer_value_encodings = torch.einsum(
             "bhs,bshv->bhv", attentions_l_t, encodings_for_single_token_all_heads
@@ -201,26 +203,28 @@ class App:
     def closest_to_all_values(
         self,
         text="Time flies like an arrow.",
-        selected_token=2,
+        selected_token=1,
         selected_layer=0,
         distance_type="Euclidean",
         use_positional=True,
     ):
-        if debug:
-            print(f"{selected_token=}")
+
+        # if you click on something that's not a token first, Gradio supplies None as selected_token
+        # which is suboptimal
         if not selected_token:
             selected_token = 1
+        if debug:
+            print(f"{selected_token=}")
         self.transformer.create_positional_embeddings(selected_token)
 
         inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
         input_ids = inputs["input_ids"]
-
         token_str = f"{self.transformer.tokenizer.convert_ids_to_tokens(input_ids[0, selected_token].item())} ({input_ids[0, selected_token]})"
 
         outputs = self.transformer.model(**inputs)
-
-        layer_0_value_encodings = self.transformer.get_all_layer_0_value_encodings(use_positional=use_positional)
-
+        layer_0_value_encodings = self.transformer.get_all_layer_0_value_encodings(
+            use_positional=use_positional
+        )
         post_attention_encoding = self.transformer.get_intermediate_output(
             selected_layer, selected_token, outputs
         )
@@ -231,7 +235,7 @@ class App:
                 self.transformer,
                 None,
                 post_attention_encoding[:, head, :].squeeze(0),
-                layer_0_value_encodings["V_all_layer_0"][:, head, :],
+                layer_0_value_encodings[:, head, :],
                 type=distance_type,
             )
             closest_for_head = [f"{token} ({dist})" for token, dist in closest_for_head]
