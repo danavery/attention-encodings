@@ -211,7 +211,7 @@ class App:
 
         # if you click on something that's not a token first, Gradio supplies None as selected_token
         # which is suboptimal
-        if not selected_token:
+        if selected_token is None:
             selected_token = 1
         if debug:
             print(f"{selected_token=}")
