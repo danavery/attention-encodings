@@ -149,9 +149,6 @@ class RobertaTransformer:
         return post_attn_layer_value_encodings
 
 
-k = 15
-
-
 def get_distances_euclidean(post_attention_encoding, comparison_encodings, p=2.0):
     return F.pairwise_distance(post_attention_encoding, comparison_encodings, p=p)
 
@@ -199,6 +196,7 @@ def get_closest(
 class App:
     def __init__(self):
         self.transformer = RobertaTransformer()
+        self.k = 15
 
     def closest_to_all_values(
         self,
@@ -229,7 +227,7 @@ class App:
         closest_df = pd.DataFrame()
         for head in range(self.transformer.config.num_attention_heads):
             closest_for_head = get_closest(
-                k,
+                self.k,
                 self.transformer,
                 None,
                 post_attention_encoding[:, head, :].squeeze(0),
@@ -242,16 +240,22 @@ class App:
             closest_df = pd.concat([closest_df, closest_for_head_df], axis=1)
         return (token_str, closest_df)
 
-    def launch(self):
+    def get_intro_markdown(self):
         with open("./README.md", "r") as file:
             intro_markdown = file.read()
             position = intro_markdown.find("# Token")
             if position != -1:
                 intro_markdown = intro_markdown[position:]
+        return intro_markdown
+
+    def launch(self):
+        intro_markdown = self.get_intro_markdown()
 
         custom_css = """.combined span { font-size: 9px !important; padding: 2px }
                     .combined div { min-height: 10px !important}
         """
+        custom_js = """document.querySelector('.combined').click();"""
+
         with gr.Blocks(css=custom_css) as demo:
             initial_text = "Time flies like an arrow. Fruit flies like a banana."
             with gr.Row():
@@ -310,7 +314,6 @@ class App:
                 [text, tokens, selected_layer, distance_type, use_positional],
                 [selected_token_str, combined_dataframe],
             )
-            # display_tokens = (self.transformer.tokens_for_text, [text], [tokens])
             tokens.click(*display_values)
             selected_layer.change(*display_values)
             distance_type.change(*display_values)
@@ -321,6 +324,7 @@ class App:
             text.submit(*display_tokens)
 
             gr.Markdown(intro_markdown)
+            combined_dataframe.change(_js=custom_js)
         demo.launch()
 
 
