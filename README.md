@@ -23,7 +23,7 @@ This quick experiment offers an exploratory look into the transformation of indi
 3. Choose a layer number (starting from 0) to see how the post-attention encoding at the specific level compares to the initial vocabulary embeddings.
 4. Optionally, switch between the Euclidean and cosine distance metrics for a different perspective.
 5. Also optionally, turn applying the selected token's positional encoding to the model vocabulary on or off.
-5. *Safari sometimes displays a mostly-blank table on first run. Clicking on a cell seems to fix things.* This seems to be a Safari/Gradio issue.
+5. **Safari sometimes displays a mostly-blank table on first run. Clicking on a cell seems to fix things.** This seems to be a Safari/Gradio issue.
 
 ## Methodology
 
