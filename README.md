@@ -34,6 +34,8 @@ This quick experiment offers an exploratory look into the transformation of indi
     * The resulting vocabulary encodings are then projected into the transformer's Value space at the input layer.
     * By comparing the post-attention encoding against this set, the tokens corresponding to the "closest" token embeddings are displayed.
     * This procedure is replicated for each attention head.
+-  **New (3 Nov 2023)**:
+    * Distances are also computed from the selected post-attention mechanism token encoding at the selected layer to all sequence tokens at the same layer.
 
 ## Why RoBERTa?
 
@@ -47,9 +49,11 @@ However, many seem to be simply noise--try any token at layer 11.
 
 Intriguingly, the first layer often creates new token encodings that are closer to **another token in the sequence** than to the original token. Note that in "Time flies like an arrow, fruit flies like a banana," using cosine distance, the token "Time" comes out of the attention weighting closer to "flies" than to any other vocabulary token in four of the twelve heads, and comparatively far away from its original encoding.
 
+
 ## Personal Thoughts
 
 The results here suggest that later token encodings might not be firmly linked to their original tokens. It's plausible that concepts are distributed among all encodings at each layer. This raises an interesting possibility: Perhaps the number of encodings at each layer doesn't need to be fixed. While architectures like CNNs and fully-connected networks benefit from varying neuron counts across layers, transformers might also benefit from experimenting with different numbers of output encodings per layer. Though there are potential efficiency challenges, I'm going to cleverly wave my hands in a distracting way and note that it's an area ripe for exploration.
+
 
 ## Future Directions
 
