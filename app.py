@@ -4,8 +4,6 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 
-# %load_ext gradio
-
 debug = False
 
 
@@ -62,13 +60,9 @@ class RobertaTransformer:
     def get_selected_layer_value_weights(self, selected_layer):
         return self.model.encoder.layer[selected_layer].attention.self.value.weight
 
-    def get_attention_weights_all_heads(self, outputs, selected_layer, selected_token):
-        attentions_l_t = outputs.attentions[selected_layer][:, :, selected_token, :]
-        if debug:
-            print(f"{attentions_l_t[:, 0, :]=}")
-        if debug:
-            print(f"{torch.sum(attentions_l_t[:, 0, :])=}")
-        return attentions_l_t
+    def get_attention_weights_all_heads(self, outputs, selected_layer):
+        attentions = outputs.attentions[selected_layer]
+        return attentions
 
     def get_all_layer_0_value_encodings(self, use_positional=True):
         layer_0_value_weights = self.get_selected_layer_value_weights(0)
@@ -94,61 +88,45 @@ class RobertaTransformer:
         token_list = [[token] for token in tokens]
         return token_list
 
-    def get_intermediate_output(self, selected_layer, selected_token, outputs):
+    def get_intermediate_output(self, selected_layer, outputs):
         selected_layer = int(selected_layer)
         # get weights for selected_layer
         selected_layer_value_weights = self.get_selected_layer_value_weights(
             selected_layer
         )
-        if debug:
-            print(f"{selected_layer_value_weights.shape=}")
-        # if debug: print(f"{selected_layer_value_weights[selected_token]=}")
 
+        # actual input embeddings (not all-same-position-encoded)
         # <batch_size, seq_len, hidden_size>, the input for selected_layer
         layer_sequence_inputs = outputs.hidden_states[
             selected_layer
-        ]  # actual input embeddings (not all-same-position-encoded)
-        if debug:
-            print(f"{layer_sequence_inputs.shape=}")  # [1, 8, 768]
-        if debug:
-            print(f"{layer_sequence_inputs[:, selected_token, :5]=}")
+        ]
 
-        # mutiply input encodings by value weights to get value encodings
+        # multiply input encodings by value weights to get value encodings
         # so values for all tokens, all heads
+        # <batch_size, seq_len, hidden_size/num_heads>
         value_encodings = torch.einsum(
             "bsd,dv->bsv", layer_sequence_inputs, selected_layer_value_weights
         )
-        if debug:
-            print(
-                f"{value_encodings.shape=}"
-            )  # (1,8,768)<batch_size, seq_len, hidden_size>
 
         # get all attention weights for all heads, single layer, single token
-        attentions_l_t = self.get_attention_weights_all_heads(
-            outputs, selected_layer, selected_token
-        )
-        if debug:
-            print(f"{attentions_l_t.shape=}")  # (1,12,8)
+        # <batch_size, num_heads, seq_len, seq_len>
+        attentions_l = self.get_attention_weights_all_heads(outputs, selected_layer)
 
         # split value encoding into per-head encodings
-        encodings_for_single_token_all_heads = value_encodings.view(
+        # <batch_size, seq_len, num_heads, hidden_size/num_heads>
+        encodings_per_head = value_encodings.view(
             value_encodings.size(0),
             value_encodings.size(1),
             self.config.num_attention_heads,
             self.head_size,
         )
-        if debug:
-            print(
-                f"{encodings_for_single_token_all_heads.shape=}"
-            )  # (([1, 8, 12, 64]))
 
-        post_attn_layer_value_encodings = torch.einsum(
-            "bhs,bshv->bhv", attentions_l_t, encodings_for_single_token_all_heads
+        # <batch_size, seq_len, num_heads, hidden_size/num_heads>
+        post_attn_layer_encodings = torch.einsum(
+            "bhij,bjhv->bihv", attentions_l, encodings_per_head
         )
-        if debug:
-            print(f"{post_attn_layer_value_encodings.shape=}")  # (1,12,64)
 
-        return post_attn_layer_value_encodings
+        return post_attn_layer_encodings
 
 
 def get_distances_euclidean(post_attention_encoding, comparison_encodings, p=2.0):
@@ -178,15 +156,10 @@ def get_closest(
             post_attention_encoding, comparison_encodings
         )
     distances, encodings = torch.topk(encoding_distances, k, largest=False)
-    if debug:
-        print(f"{post_attention_encoding.shape=}")
-    if debug:
-        print(f"{comparison_encodings.shape=}")
-    if debug:
-        print(f"{encodings.shape=}")
+
     if input_ids is not None:  # the indexes are into input_ids instead of encodings
         encodings_str = transformer.tokenizer.convert_ids_to_tokens(
-            input_ids[0].tolist()
+            input_ids[0, encodings].tolist()
         )
     else:
         encodings_str = transformer.tokenizer.convert_ids_to_tokens(encodings.tolist())
@@ -208,7 +181,13 @@ class App:
         distance_type="Euclidean",
         use_positional=True,
     ):
+        """
+        Computes and returns the closest token encodings to a specified token's
+        post-attention encoding across all attention heads at a specified layer.
 
+        The closeness between encodings is measured in the embedding space using
+        either Euclidean or Cosine distance.
+        """
         # if you click on something that's not a token first, Gradio supplies None as selected_token
         # which is suboptimal
         if selected_token is None:
@@ -225,16 +204,18 @@ class App:
         layer_0_value_encodings = self.transformer.get_all_layer_0_value_encodings(
             use_positional=use_positional
         )
-        post_attention_encoding = self.transformer.get_intermediate_output(
-            selected_layer, selected_token, outputs
+
+        post_attention_encodings = self.transformer.get_intermediate_output(
+            selected_layer, outputs
         )
         closest_df = pd.DataFrame()
+        closest_outputs_df = pd.DataFrame()
         for head in range(self.transformer.config.num_attention_heads):
             closest_for_head = get_closest(
                 self.k,
                 self.transformer,
                 None,
-                post_attention_encoding[:, head, :].squeeze(0),
+                post_attention_encodings[:, selected_token, head, :].squeeze(0),
                 layer_0_value_encodings[:, head, :],
                 type=distance_type,
             )
@@ -242,7 +223,20 @@ class App:
             closest_for_head_df = pd.DataFrame(closest_for_head)
             closest_for_head_df.columns = [f"head {head}"]
             closest_df = pd.concat([closest_df, closest_for_head_df], axis=1)
-        return (token_str, closest_df)
+
+            closest_outputs_for_head = get_closest(
+                len(input_ids[0]),
+                self.transformer,
+                input_ids,
+                post_attention_encodings[:, selected_token, head, :].squeeze(0),
+                post_attention_encodings[:, :, head, :].squeeze(0),
+                type=distance_type,
+            )
+            closest_outputs_for_head = [f"{token} ({dist})" for token, dist in closest_outputs_for_head]
+            closest_outputs_for_head_df = pd.DataFrame(closest_outputs_for_head)
+            closest_outputs_for_head_df.columns = [f"head {head}"]
+            closest_outputs_df = pd.concat([closest_outputs_df, closest_outputs_for_head_df], axis=1)
+        return (token_str, closest_df, closest_outputs_df)
 
     def get_intro_markdown(self):
         with open("./README.md", "r") as file:
@@ -255,7 +249,8 @@ class App:
     def launch(self):
         intro_markdown = self.get_intro_markdown()
 
-        custom_css = """.combined span { font-size: 9px !important; padding: 2px }
+        custom_css = """
+                    .combined span { font-size: 9px !important; padding: 2px }
                     .combined div { min-height: 10px !important}
         """
         custom_js = """document.querySelector('.combined').click();"""
@@ -313,10 +308,18 @@ class App:
                     col_count=12,
                     headers=[[f"head {head}"] for head in range(12)],
                 )
+            with gr.Row():
+                intertoken_dataframe = gr.DataFrame(
+                    label="Nearest sequence tokens (with distance)",
+                    show_label=True,
+                    elem_classes="combined",
+                    col_count=12,
+                    headers=[[f"head {head}"] for head in range(12)],
+                )
             display_values = (
                 self.closest_to_all_values,
                 [text, tokens, selected_layer, distance_type, use_positional],
-                [selected_token_str, combined_dataframe],
+                [selected_token_str, combined_dataframe, intertoken_dataframe],
             )
             tokens.click(*display_values)
             selected_layer.change(*display_values)
