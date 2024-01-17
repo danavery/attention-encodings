@@ -325,6 +325,7 @@ class App:
             selected_layer.change(*display_values)
             distance_type.change(*display_values)
             use_positional.change(*display_values)
+            demo.load(*display_values)
 
             display_tokens = (self.transformer.tokens_for_text, [text], [tokens])
             show_tokens.click(*display_tokens)
