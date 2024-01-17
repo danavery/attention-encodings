@@ -1,6 +1,6 @@
 ---
 title: Attention Encodings
-emoji: ⚡
+emoji: 🔎
 colorFrom: indigo
 colorTo: yellow
 sdk: gradio
