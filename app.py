@@ -306,7 +306,7 @@ class App:
                     show_label=True,
                     elem_classes="combined",
                     col_count=12,
-                    headers=[[f"head {head}"] for head in range(12)],
+                    headers=[f"head {head}" for head in range(12)],
                 )
             with gr.Row():
                 intertoken_dataframe = gr.DataFrame(
@@ -314,7 +314,7 @@ class App:
                     show_label=True,
                     elem_classes="combined",
                     col_count=12,
-                    headers=[[f"head {head}"] for head in range(12)],
+                    headers=[f"head {head}" for head in range(12)],
                 )
             display_values = (
                 self.closest_to_all_values,
