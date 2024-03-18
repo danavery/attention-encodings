@@ -338,11 +338,7 @@ class App:
                 combined_dataframe.change(_js=custom_js)
             except:
                 combined_dataframe.change(js=custom_js)
-        if os.environ.get('DEMO') == '1':
-            root_path = '/attention-encodings'
-        else:
-            root_path = ''
-        demo.launch(server_name="0.0.0.0", root_path=root_path)
+        demo.launch(server_name="0.0.0.0")
 
 
 App().launch()
