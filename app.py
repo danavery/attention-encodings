@@ -332,7 +332,7 @@ class App:
             text.submit(*display_tokens)
 
             gr.Markdown(intro_markdown)
-            combined_dataframe.change(_js=custom_js)
+            combined_dataframe.change(js=custom_js)
         demo.launch()
 
 
