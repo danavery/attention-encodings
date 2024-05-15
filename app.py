@@ -1,5 +1,3 @@
-import os
-
 import gradio as gr
 import pandas as pd
 import torch
@@ -11,13 +9,21 @@ debug = False
 
 class RobertaTransformer:
     def __init__(self, model_name="roberta-base"):
+        self.model_name = model_name
+        self._load_model(model_name)
+        self._setup_embeddings()
+        self._init_attributes()
+
+    def _load_model(self, model_name):
         self.model = AutoModel.from_pretrained(
-            model_name, output_hidden_states=True, output_attentions=True
+            self.model_name, output_hidden_states=True, output_attentions=True
         )
-        self.positional_embedding_offset = 2
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model.eval()
         self.config = AutoConfig.from_pretrained(model_name)
+        self.model.eval()
+
+    def _setup_embeddings(self):
+        self.positional_embedding_offset = 2
         self.head_size = self.config.hidden_size // self.config.num_attention_heads
         self.all_word_embeddings = self.model.embeddings.word_embeddings.weight.data
         self.positional_embeddings = self.model.embeddings.position_embeddings.weight
@@ -25,6 +31,8 @@ class RobertaTransformer:
         self.normalized_word_embeddings_without_position = self.layer_norm(
             self.all_word_embeddings
         )
+
+    def _init_attributes(self):
         self.all_word_embeddings_with_position = None
         self.normalized_word_embeddings_with_position = None
 
