@@ -107,9 +107,7 @@ class RobertaTransformer:
 
         # actual input embeddings (not all-same-position-encoded)
         # <batch_size, seq_len, hidden_size>, the input for selected_layer
-        layer_sequence_inputs = outputs.hidden_states[
-            selected_layer
-        ]
+        layer_sequence_inputs = outputs.hidden_states[selected_layer]
 
         # multiply input encodings by value weights to get value encodings
         # so values for all tokens, all heads
@@ -139,14 +137,15 @@ class RobertaTransformer:
         return post_attn_layer_encodings
 
 
-def get_distances_euclidean(post_attention_encoding, comparison_encodings, p=2.0):
-    return F.pairwise_distance(post_attention_encoding, comparison_encodings, p=p)
-
-
-def get_distances_cosine(post_attention_encoding, comparison_encodings):
-    return 1 - F.cosine_similarity(
-        post_attention_encoding, comparison_encodings, dim=-1
-    )
+def get_distances(
+    post_attention_encoding, comparison_encodings, distance_type="Euclidean"
+):
+    if distance_type == "Euclidean":
+        return F.pairwise_distance(post_attention_encoding, comparison_encodings)
+    else:
+        return 1 - F.cosine_similarity(
+            post_attention_encoding, comparison_encodings, dim=-1
+        )
 
 
 def get_closest(
@@ -155,16 +154,11 @@ def get_closest(
     input_ids,
     post_attention_encoding,
     comparison_encodings,
-    type="euclidean",
+    distance_type="Euclidean",
 ):
-    if type == "Euclidean":
-        encoding_distances = get_distances_euclidean(
-            post_attention_encoding, comparison_encodings
-        )
-    else:
-        encoding_distances = get_distances_cosine(
-            post_attention_encoding, comparison_encodings
-        )
+    encoding_distances = get_distances(
+        post_attention_encoding, comparison_encodings, distance_type
+    )
     distances, encodings = torch.topk(encoding_distances, k, largest=False)
 
     if input_ids is not None:  # the indexes are into input_ids instead of encodings
@@ -227,7 +221,7 @@ class App:
                 None,
                 post_attention_encodings[:, selected_token, head, :].squeeze(0),
                 layer_0_value_encodings[:, head, :],
-                type=distance_type,
+                distance_type=distance_type,
             )
             closest_for_head = [f"{token} ({dist})" for token, dist in closest_for_head]
             closest_for_head_df = pd.DataFrame(closest_for_head)
@@ -240,12 +234,16 @@ class App:
                 input_ids,
                 post_attention_encodings[:, selected_token, head, :].squeeze(0),
                 post_attention_encodings[:, :, head, :].squeeze(0),
-                type=distance_type,
+                distance_type=distance_type,
             )
-            closest_outputs_for_head = [f"{token} ({dist})" for token, dist in closest_outputs_for_head]
+            closest_outputs_for_head = [
+                f"{token} ({dist})" for token, dist in closest_outputs_for_head
+            ]
             closest_outputs_for_head_df = pd.DataFrame(closest_outputs_for_head)
             closest_outputs_for_head_df.columns = [f"head {head}"]
-            closest_outputs_df = pd.concat([closest_outputs_df, closest_outputs_for_head_df], axis=1)
+            closest_outputs_df = pd.concat(
+                [closest_outputs_df, closest_outputs_for_head_df], axis=1
+            )
         return (token_str, closest_df, closest_outputs_df)
 
     def get_intro_markdown(self):
