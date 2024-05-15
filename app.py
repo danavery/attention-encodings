@@ -212,8 +212,8 @@ class App:
         post_attention_encodings = self.transformer.get_intermediate_output(
             selected_layer, outputs
         )
-        closest_df = pd.DataFrame()
-        closest_outputs_df = pd.DataFrame()
+        closest_df = []
+        closest_outputs_df = []
         for head in range(self.transformer.config.num_attention_heads):
             closest_for_head = get_closest(
                 self.k,
@@ -224,9 +224,7 @@ class App:
                 distance_type=distance_type,
             )
             closest_for_head = [f"{token} ({dist})" for token, dist in closest_for_head]
-            closest_for_head_df = pd.DataFrame(closest_for_head)
-            closest_for_head_df.columns = [f"head {head}"]
-            closest_df = pd.concat([closest_df, closest_for_head_df], axis=1)
+            closest_df.append(pd.DataFrame(closest_for_head, columns=[f"head {head}"]))
 
             closest_outputs_for_head = get_closest(
                 len(input_ids[0]),
@@ -239,11 +237,12 @@ class App:
             closest_outputs_for_head = [
                 f"{token} ({dist})" for token, dist in closest_outputs_for_head
             ]
-            closest_outputs_for_head_df = pd.DataFrame(closest_outputs_for_head)
-            closest_outputs_for_head_df.columns = [f"head {head}"]
-            closest_outputs_df = pd.concat(
-                [closest_outputs_df, closest_outputs_for_head_df], axis=1
+            closest_outputs_df.append(
+                pd.DataFrame(closest_outputs_for_head, columns=[f"head {head}"])
             )
+
+        closest_df = pd.concat(closest_df, axis=1)
+        closest_outputs_df = pd.concat(closest_outputs_df, axis=1)
         return (token_str, closest_df, closest_outputs_df)
 
     def get_intro_markdown(self):
