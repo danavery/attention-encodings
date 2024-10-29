@@ -1,10 +1,12 @@
 import gradio as gr
+import os
 import pandas as pd
 import torch
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 debug = False
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 class RobertaTransformer:
@@ -16,7 +18,10 @@ class RobertaTransformer:
 
     def _load_model(self, model_name):
         self.model = AutoModel.from_pretrained(
-            self.model_name, output_hidden_states=True, output_attentions=True
+            self.model_name,
+            output_hidden_states=True,
+            output_attentions=True,
+            attn_implementation="eager",
         )
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.config = AutoConfig.from_pretrained(model_name)
@@ -177,6 +182,10 @@ class App:
         self.transformer = RobertaTransformer()
         self.k = 15
 
+    def update_tokens(self, text):
+        tokens = self.transformer.tokens_for_text(text)
+        return gr.update(samples=tokens, components=["text"])
+
     def closest_to_all_values(
         self,
         text="Time flies like an arrow.",
@@ -265,7 +274,7 @@ class App:
         with gr.Blocks(css=custom_css) as demo:
             initial_text = "Time flies like an arrow. Fruit flies like a banana."
             with gr.Row():
-                text = gr.Text(
+                text = gr.Textbox(
                     placeholder="Text to process",
                     value=initial_text,
                     scale=4,
@@ -323,20 +332,35 @@ class App:
                     col_count=12,
                     headers=[f"head {head}" for head in range(12)],
                 )
-            display_values = (
-                self.closest_to_all_values,
-                [text, tokens, selected_layer, distance_type, use_positional],
-                [selected_token_str, combined_dataframe, intertoken_dataframe],
-            )
-            tokens.click(*display_values)
-            selected_layer.change(*display_values)
-            distance_type.change(*display_values)
-            use_positional.change(*display_values)
-            demo.load(*display_values)
 
-            display_tokens = (self.transformer.tokens_for_text, [text], [tokens])
-            show_tokens.click(*display_tokens)
-            text.submit(*display_tokens)
+            tokens.click(
+                fn=self.closest_to_all_values,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional],
+                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+            )
+            selected_layer.change(
+                fn=self.closest_to_all_values,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional],
+                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+            )
+            distance_type.change(
+                fn=self.closest_to_all_values,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional],
+                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+            )
+            use_positional.change(
+                fn=self.closest_to_all_values,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional],
+                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+            )
+            demo.load(
+                fn=self.closest_to_all_values,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional],
+                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+            )
+
+            show_tokens.click(self.update_tokens, inputs=[text], outputs=[tokens])
+            text.submit(self.update_tokens, inputs=[text], outputs=[tokens])
 
             gr.Markdown(intro_markdown)
             try:
