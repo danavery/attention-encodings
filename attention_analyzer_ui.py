@@ -9,6 +9,7 @@ class AttentionAnalyzerUI:
         self.k = analyzer.k
 
     def get_intro_markdown(self):
+        # read in README.md and strip out Hugging Face Spaces metadata if present
         with open("./README.md", "r") as file:
             intro_markdown = file.read()
             position = intro_markdown.find("# Token")
