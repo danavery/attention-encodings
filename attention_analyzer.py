@@ -188,8 +188,8 @@ class AttentionAnalyzer:
         2. Closest sequence tokens to post-attention encoding
         """
         num_heads = self.transformer.config.num_attention_heads
-        closest_df = []
-        closest_outputs_df = []
+        vocab_distances_df = []
+        sequence_distances_df = []
 
         for head in range(num_heads):
             # Compare to level 0 vocabulary value encodings
@@ -201,14 +201,14 @@ class AttentionAnalyzer:
                 layer_0_value_encodings[:, head, :],
                 distance_type=distance_type,
             )
-            closest_df.append(
+            vocab_distances_df.append(
                 pd.DataFrame(
                     [f"{token} ({dist})" for token, dist in vocab_comparisons],
                     columns=[f"head {head}"],
                 )
             )
 
-            # Compare to other sequence token encodings at
+            # Compare to other sequence token encodings in the selected layer's post-attention outputs
             sequence_comparisons = self.get_closest(
                 len(input_ids),
                 self.transformer,
@@ -217,11 +217,11 @@ class AttentionAnalyzer:
                 post_attention_encodings[:, head, :],
                 distance_type=distance_type,
             )
-            closest_outputs_df.append(
+            sequence_distances_df.append(
                 pd.DataFrame(
                     [f"{token} ({dist})" for token, dist in sequence_comparisons],
                     columns=[f"head {head}"],
                 )
             )
 
-        return (pd.concat(closest_df, axis=1), pd.concat(closest_outputs_df, axis=1))
+        return (pd.concat(vocab_distances_df, axis=1), pd.concat(sequence_distances_df, axis=1))
