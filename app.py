@@ -1,13 +1,13 @@
 import gradio as gr
+import logging
 import os
 import pandas as pd
 import torch
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModel, AutoTokenizer
 
-debug = False
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
+logging.basicConfig(level=logging.INFO)
 
 class TransformerManager:
     def __init__(self, model_name="roberta-base"):
@@ -33,9 +33,7 @@ class TransformerManager:
         self.vocab_base_embeddings = self.model.embeddings.word_embeddings.weight.data
         self.positional_embeddings = self.model.embeddings.position_embeddings.weight
         self.layer_norm = self.model.embeddings.LayerNorm
-        self.normalized_vocab_embeddings = self.layer_norm(
-            self.vocab_base_embeddings
-        )
+        self.normalized_vocab_embeddings = self.layer_norm(self.vocab_base_embeddings)
 
     def _init_attributes(self):
         self.position_adjusted_vocab = None
@@ -52,13 +50,12 @@ class TransformerManager:
             self.position_adjusted_vocab
         )
 
-        if debug:
-            print(selected_token_idx)
-            print(f"{self.vocab_base_embeddings[selected_token_idx][:5]=}")
-            print(
-                f"{self.positional_embeddings[selected_token_idx + self.position_embedding_start_idx][:5]=}"
-            )
-            print(f"{self.position_adjusted_vocab[selected_token_idx][:5]=}")
+        logging.debug(selected_token_idx)
+        logging.debug(f"{self.vocab_base_embeddings[selected_token_idx][:5]=}")
+        logging.debug(
+            f"{self.positional_embeddings[selected_token_idx + self.position_embedding_start_idx][:5]=}"
+        )
+        logging.debug(f"{self.position_adjusted_vocab[selected_token_idx][:5]=}")
 
     def get_layer_value_weights(self, selected_layer):
         return self.model.encoder.layer[selected_layer].attention.self.value.weight
@@ -81,17 +78,19 @@ class AttentionAnalyzer:
         return token_list
 
     def get_distances(
-        self,post_attention_encoding, comparison_encodings, distance_type="Euclidean"
+        self, post_attention_encoding, comparison_encodings, distance_type="Euclidean"
     ):
         """
         Compute the distances between a post-attention encoding and a set of comparison encodings.
         """
         if distance_type == "Euclidean":
             return F.pairwise_distance(post_attention_encoding, comparison_encodings)
-        else:
+        elif distance_type == "Cosine":
             return 1 - F.cosine_similarity(
                 post_attention_encoding, comparison_encodings, dim=-1
             )
+        else:
+            raise ValueError(f"Invalid distance type: {distance_type}")
 
     def get_all_layer_0_value_encodings(self, apply_positional_embeddings=True):
         layer_0_value_weights = self.transformer.get_layer_value_weights(0)
@@ -108,15 +107,15 @@ class AttentionAnalyzer:
             )
         return layer0_value_encodings
 
-
-
     def project_to_value_by_head(self, embeddings, value_weights):
-        ''''''
-        x = torch.einsum("nd,df->nf", embeddings, value_weights)
+        x = embeddings @ value_weights
         # reshape into individual head value encodings
-        x_heads = x.view(x.size(0), self.transformer.config.num_attention_heads, self.transformer.head_size)
+        x_heads = x.view(
+            x.size(0),
+            self.transformer.config.num_attention_heads,
+            self.transformer.head_size,
+        )
         return x_heads
-
 
     def compute_post_attention_values(self, selected_layer, outputs):
         """
@@ -130,35 +129,40 @@ class AttentionAnalyzer:
         )
 
         # actual input embeddings (not all-same-position-encoded)
-        # <batch_size, seq_len, hidden_size>, the input for selected_layer
-        layer_sequence_inputs = outputs.hidden_states[selected_layer]
+        # <seq_len, hidden_size>, the input for selected_layer
+        layer_sequence_inputs = outputs.hidden_states[selected_layer].squeeze(0)
 
         # multiply input encodings by value weights to get value encodings
         # so values for all tokens, all heads
-        # <batch_size, seq_len, hidden_size/num_heads>
-        value_encodings = torch.einsum(
-            "bsd,dv->bsv", layer_sequence_inputs, selected_layer_value_weights
-        )
+        # <seq_len, hidden_size/num_heads>
+        value_encodings = layer_sequence_inputs @ selected_layer_value_weights
 
         # get all attention weights for all heads, single layer, single token
-        # <batch_size, num_heads, seq_len, seq_len>
-        layer_attention_weights = self.transformer.get_layer_attention_weights(outputs, selected_layer)
+        # <num_heads, seq_len, seq_len>
+        layer_attention_weights = self.transformer.get_layer_attention_weights(
+            outputs, selected_layer
+        ).squeeze(0)
 
         # split value encoding into per-head encodings
-        # <batch_size, seq_len, num_heads, hidden_size/num_heads>
+        # <seq_len, num_heads, hidden_size/num_heads>
         encodings_per_head = value_encodings.view(
             value_encodings.size(0),
-            value_encodings.size(1),
             self.transformer.config.num_attention_heads,
             self.transformer.head_size,
         )
 
-        # <batch_size, seq_len, num_heads, hidden_size/num_heads>
-        post_attn_layer_encodings = torch.einsum(
-            "bhij,bjhv->bihv", layer_attention_weights, encodings_per_head
+        # permute encodings to <num_heads, seq_len, hidden_size/num_heads>
+        encodings_per_head_permuted = encodings_per_head.permute(1, 0, 2)
+
+        # multiply attention weights by encodings
+        post_attn_layer_encodings = layer_attention_weights.bmm(
+            encodings_per_head_permuted
         )
 
-        return post_attn_layer_encodings.squeeze(0)
+        # end up with <seq_len, num_heads, hidden_size/num_heads>
+        post_attn_layer_encodings = post_attn_layer_encodings.permute(1, 0, 2)
+
+        return post_attn_layer_encodings
 
     def get_closest(
         self,
@@ -179,7 +183,9 @@ class AttentionAnalyzer:
                 input_ids[0, encodings].tolist()
             )
         else:
-            encodings_str = transformer.tokenizer.convert_ids_to_tokens(encodings.tolist())
+            encodings_str = transformer.tokenizer.convert_ids_to_tokens(
+                encodings.tolist()
+            )
         distances = ["{0:.3f}".format(distance.item()) for distance in distances]
 
         return list(zip(encodings_str, distances))
@@ -203,8 +209,7 @@ class AttentionAnalyzer:
         # which is suboptimal
         if selected_token is None:
             selected_token = 1
-        if debug:
-            print(f"{selected_token=}")
+        logging.debug(f"{selected_token=}")
         self.transformer.adjust_vocab_to_token_position(selected_token)
 
         inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
@@ -218,7 +223,6 @@ class AttentionAnalyzer:
 
         # run the model to get the attention weights and post-attention encodings
         outputs = self.transformer.model(**inputs)
-
 
         # get the post-attention encodings for all tokens at the selected layer
         post_attention_encodings = self.compute_post_attention_values(
@@ -256,6 +260,7 @@ class AttentionAnalyzer:
         closest_df = pd.concat(closest_df, axis=1)
         closest_outputs_df = pd.concat(closest_outputs_df, axis=1)
         return (decoded_tokens, closest_df, closest_outputs_df)
+
 
 class AttentionAnalyzerUI:
     def __init__(self, analyzer: AttentionAnalyzer):
@@ -371,7 +376,9 @@ class AttentionAnalyzerUI:
                 outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
             )
 
-            show_tokens.click(self.update_token_display, inputs=[text], outputs=[tokens])
+            show_tokens.click(
+                self.update_token_display, inputs=[text], outputs=[tokens]
+            )
             text.submit(self.update_token_display, inputs=[text], outputs=[tokens])
 
             gr.Markdown(intro_markdown)
@@ -380,6 +387,7 @@ class AttentionAnalyzerUI:
             except:
                 combined_dataframe.change(js=custom_js)
         demo.launch(server_name="0.0.0.0")
+
 
 class App:
     def __init__(self):
@@ -390,6 +398,6 @@ class App:
     def launch(self):
         self.ui.launch()
 
+
 if __name__ == "__main__":
     App().launch()
-
