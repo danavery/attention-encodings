@@ -28,9 +28,16 @@ class AttentionAnalyzerUI:
                     .combined span { font-size: 9px !important; padding: 2px }
                     .combined div { min-height: 10px !important}
         """
-        custom_js = """document.querySelector('.combined').click();"""
+        # This is a hack to make Safari render the dataframe on load
+        head = """
+        <script>
+        setTimeout(() => {
+            window.scrollTo(0, 10);
+            window.scrollTo(0, 0);
+        }, 1000);
+        </script>"""
 
-        with gr.Blocks(css=custom_css) as demo:
+        with gr.Blocks(css=custom_css, head=head) as demo:
             initial_text = "Time flies like an arrow. Fruit flies like a banana."
             with gr.Row():
                 text = gr.Textbox(
@@ -124,5 +131,5 @@ class AttentionAnalyzerUI:
             text.submit(self.update_token_display, inputs=[text], outputs=[tokens])
 
             gr.Markdown(intro_markdown)
-            combined_dataframe.change(js=custom_js)
+
         demo.launch(server_name="0.0.0.0")
