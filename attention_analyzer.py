@@ -17,7 +17,7 @@ class AttentionAnalyzer:
         return token_list
 
     def get_distances(
-        self, post_attention_encoding, comparison_encodings, distance_type="Euclidean"
+        self, post_attention_encoding, comparison_encodings, distance_type="Cosine"
     ):
         """
         Compute the distances between a post-attention encoding and a set of comparison encodings.
@@ -99,38 +99,123 @@ class AttentionAnalyzer:
 
         return post_attn_layer_encodings
 
-    def get_closest(
+    def _find_closest_encodings(
         self,
-        k,
-        transformer,
-        input_ids,
-        post_attention_encoding,
-        comparison_encodings,
-        distance_type="Euclidean",
+        reference_encoding,  # the post-attention encoding we're comparing from
+        comparison_encodings,  # either layer_0 or post-attention encodings
+        distance_type="Cosine",
     ):
-        encoding_distances = self.get_distances(
-            post_attention_encoding, comparison_encodings, distance_type
+        """
+        Returns sorted distances and indices for closest encodings
+        """
+        distances = self.get_distances(
+            reference_encoding, comparison_encodings, distance_type
         )
-        distances, encodings = torch.topk(encoding_distances, k, largest=False)
+        all_distances, all_indices = torch.sort(distances, descending=False)
+        return all_distances, all_indices
 
-        if input_ids is not None:  # the indexes are into input_ids instead of encodings
-            encodings_str = transformer.tokenizer.convert_ids_to_tokens(
-                input_ids[encodings].tolist()
-            )
-        else:
-            encodings_str = transformer.tokenizer.convert_ids_to_tokens(
-                encodings.tolist()
-            )
-        distances = ["{0:.3f}".format(distance.item()) for distance in distances]
+    def get_closest_vocabulary_tokens(
+        self,
+        reference_encoding,
+        layer_0_value_encodings,
+        selected_token_id,
+        k=15,
+        distance_type="Cosine",
+    ):
+        """
+        Find closest vocabulary tokens to the reference encoding.
+        Returns list of strings formatted with rank numbers and distances.
 
-        return list(zip(encodings_str, distances))
+        Args:
+            reference_encoding: Post-attention encoding for selected token
+            layer_0_value_encodings: Vocabulary encodings for this attention head
+            selected_token_id: Token ID of the selected token to find its rank
+            k: Number of closest tokens to return (default 15)
+            distance_type: Distance metric to use (default "Cosine")
+
+        Returns:
+            List of strings formatted as "rank. token (distance)"
+            If selected token not in top k, appends it with its actual rank
+        """
+        # Get all distances and sorted indices
+        all_distances, all_indices = self._find_closest_encodings(
+            reference_encoding, layer_0_value_encodings, distance_type
+        )
+
+        # Find rank of selected token
+        selected_token_rank = (all_indices == selected_token_id).nonzero()[0].item() + 1
+
+        # Take top k
+        distances = all_distances[:k]
+        indices = all_indices[:k]
+
+        # Convert to token strings and format with ranks
+        token_strings = self.transformer.tokenizer.convert_ids_to_tokens(
+            indices.tolist()
+        )
+        result_strings = [
+            ("▶" if indices[i] == selected_token_id else "")
+            + f"{i+1}. {token} ({dist:.3f})"
+            for i, (token, dist) in enumerate(zip(token_strings, distances))
+        ]
+        # Add original token if not in top k
+        if selected_token_rank > k:
+            selected_token_str = self.transformer.tokenizer.convert_ids_to_tokens(
+                [selected_token_id]
+            )[0]
+            result_strings.append(
+                f"▶{selected_token_rank}. {selected_token_str} ({all_distances[selected_token_rank-1]:.3f})"
+            )
+
+        return result_strings
+
+    def get_closest_sequence_tokens(
+        self,
+        reference_encoding,
+        post_attention_encodings,
+        input_ids,  # needed to convert positions to token IDs
+        selected_position,  # position in sequence we're comparing from
+        distance_type="Cosine",
+    ):
+        """
+         Find closest sequence tokens to the reference encoding.
+         Returns list of strings formatted with rank numbers and distances.
+
+         Args:
+        reference_encoding: Post-attention encoding for selected token
+        post_attention_encodings: Encodings for all tokens in sequence
+        input_ids: Tensor mapping positions to token IDs
+        selected_position: Position in sequence of selected token
+        distance_type: Distance metric to use (default "Cosine")
+
+         Returns:
+             List of strings formatted as "rank. token (distance)" for all sequence tokens
+        """
+        # Get all distances and sorted indices (these are sequence positions)
+        all_distances, position_indices = self._find_closest_encodings(
+            reference_encoding, post_attention_encodings, distance_type
+        )
+
+        # Convert positions to token IDs then to strings
+        token_ids = input_ids[position_indices]
+        token_strings = self.transformer.tokenizer.convert_ids_to_tokens(
+            token_ids.tolist()
+        )
+
+        # Format all results (we want all sequence tokens)
+        result_strings = [
+            f"{i+1}. {token} ({dist:.3f})"
+            for i, (token, dist) in enumerate(zip(token_strings, all_distances))
+        ]
+
+        return result_strings
 
     def closest_to_all_values(
         self,
         text="Time flies like an arrow.",
         selected_token=1,
         selected_layer=0,
-        distance_type="Euclidean",
+        distance_type="Cosine",
         apply_positional_embeddings=True,
     ):
         """
@@ -193,35 +278,36 @@ class AttentionAnalyzer:
 
         for head in range(num_heads):
             # Compare to level 0 vocabulary value encodings
-            vocab_comparisons = self.get_closest(
-                self.k,
-                self.transformer,
-                None,
+            vocab_comparisons = self.get_closest_vocabulary_tokens(
                 post_attention_encodings[selected_token, head, :],
                 layer_0_value_encodings[:, head, :],
+                input_ids[selected_token],
+                k=self.k,
                 distance_type=distance_type,
             )
             vocab_distances_df.append(
                 pd.DataFrame(
-                    [f"{token} ({dist})" for token, dist in vocab_comparisons],
+                    vocab_comparisons,
                     columns=[f"head {head}"],
                 )
             )
 
             # Compare to other sequence token encodings in the selected layer's post-attention outputs
-            sequence_comparisons = self.get_closest(
-                len(input_ids),
-                self.transformer,
-                input_ids,
+            sequence_comparisons = self.get_closest_sequence_tokens(
                 post_attention_encodings[selected_token, head, :],
                 post_attention_encodings[:, head, :],
+                input_ids,
+                selected_token,
                 distance_type=distance_type,
             )
             sequence_distances_df.append(
                 pd.DataFrame(
-                    [f"{token} ({dist})" for token, dist in sequence_comparisons],
+                    sequence_comparisons,
                     columns=[f"head {head}"],
                 )
             )
 
-        return (pd.concat(vocab_distances_df, axis=1), pd.concat(sequence_distances_df, axis=1))
+        return (
+            pd.concat(vocab_distances_df, axis=1),
+            pd.concat(sequence_distances_df, axis=1),
+        )
