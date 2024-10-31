@@ -50,7 +50,7 @@ class AttentionAnalyzerUI:
                     choices=["Euclidean", "Cosine"],
                     label="Distance type",
                     show_label=True,
-                    value="Euclidean",
+                    value="Cosine",
                     scale=0,
                 )
                 use_positional = gr.Checkbox(
@@ -77,7 +77,7 @@ class AttentionAnalyzerUI:
 
             with gr.Row():
                 combined_dataframe = gr.DataFrame(
-                    label="Nearest initial token value encodings (with distance)",
+                    label="Nearest initial token value encodings to selected post-attention token encoding",
                     show_label=True,
                     elem_classes="combined",
                     col_count=12,
@@ -85,7 +85,7 @@ class AttentionAnalyzerUI:
                 )
             with gr.Row():
                 intertoken_dataframe = gr.DataFrame(
-                    label="Nearest sequence tokens (with distance)",
+                    label="Nearest sequence position post-attention encodings (shown as original tokens at that position)",
                     show_label=True,
                     elem_classes="combined",
                     col_count=12,
