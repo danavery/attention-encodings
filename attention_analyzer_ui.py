@@ -32,43 +32,36 @@ class AttentionAnalyzerUI:
         pca_plot = self.create_pca_plot(text, tokens, selected_layer, head_selector)
         return selected_token_str, combined_dataframe, intertoken_dataframe, pca_plot
 
-    def create_pca_plot(self, text, token_idx, layer):
+    def create_pca_plot(self, text, token_idx, layer, head):
         """
         Visualize token's journey through layers using PCA.
         """
         # Get the token's embeddings through layers and all tokens at current layer
-        journey_data = self.analyzer.get_token_journey(text, token_idx, layer)
+        journey_data = self.analyzer.get_token_journey(text, token_idx, layer, head)
         embeddings = journey_data["embeddings"]
         token_info = journey_data["token_info"]
 
         # Convert embeddings to numpy array for PCA
         embedding_array = np.stack([e.numpy() for e in embeddings])
 
-        # Combine journey points and current layer points for PCA
-        all_points = np.concatenate([
-            embedding_array,  # Journey points
-            journey_data["all_current"].numpy()  # All tokens at current layer
-        ])
-
-        # Apply PCA
+        # Apply PCA to journey points first
         pca = PCA(n_components=2)
-        all_transformed = pca.fit_transform(all_points)
+        journey_points = pca.fit_transform(embedding_array)
 
-        # Split back into journey and current layer points
-        n_journey = len(embedding_array)
-        journey_points = all_transformed[:n_journey]
-        current_layer_points = all_transformed[n_journey:]
+        # Transform current layer points using the same PCA
+        current_layer_points = pca.transform(journey_data["all_current"].numpy())
 
         # Create plot
         fig, ax = plt.subplots(figsize=(8, 6))
 
         # Plot current layer context points in gray
         ax.scatter(current_layer_points[:, 0], current_layer_points[:, 1],
-                    color='gray', alpha=0.3, label='Other encodings at layer {layer}')
+                    color='gray', alpha=0.3, label=f'Other encodings at layer {layer}')
 
         # Plot journey points in blue
         ax.scatter(journey_points[:, 0], journey_points[:, 1],
-                    color='blue', alpha=0.5, label='Current encoding across all layers')
+                color='blue', alpha=0.5,
+                label='Token journey')
 
         # Highlight current layer in red
         ax.scatter(journey_points[layer + 1, 0], journey_points[layer + 1, 1],
@@ -211,6 +204,16 @@ class AttentionAnalyzerUI:
                 ],
             )
             use_positional.change(
+                fn=self.update_tabs,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional, head_selector],
+                outputs=[
+                    selected_token_str,
+                    combined_dataframe,
+                    intertoken_dataframe,
+                    pca_plot,
+                ],
+            )
+            head_selector.change(
                 fn=self.update_tabs,
                 inputs=[text, tokens, selected_layer, distance_type, use_positional, head_selector],
                 outputs=[

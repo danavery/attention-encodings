@@ -31,15 +31,15 @@ class AttentionAnalyzer:
         else:
             raise ValueError(f"Invalid distance type: {distance_type}")
 
-    def get_all_layer_0_value_encodings(self, apply_positional_embeddings=True):
-        layer_0_value_weights = self.transformer.get_layer_value_weights(0)
+    def get_layer_value_encodings(self, layer=0, apply_positional_embeddings=True):
+        layer_value_weights = self.transformer.get_layer_value_weights(layer)
 
         # get normalized vocab embeddings and project to value space
         return self.project_to_value_by_head(
             self.transformer.get_normalized_vocab_embeddings(
                 apply_positional_embeddings=apply_positional_embeddings
             ),
-            layer_0_value_weights,
+            layer_value_weights,
         )
 
     def project_to_value_by_head(self, embeddings, value_weights):
@@ -238,8 +238,8 @@ class AttentionAnalyzer:
         token_display_string = f"{self.transformer.tokenizer.convert_ids_to_tokens(input_ids[selected_token].item())} ({input_ids[selected_token]})"
 
         # get all value encodings for all tokens at layer 0
-        layer_0_value_encodings = self.get_all_layer_0_value_encodings(
-            apply_positional_embeddings=apply_positional_embeddings
+        layer_0_value_encodings = self.get_layer_value_encodings(
+            layer=0, apply_positional_embeddings=apply_positional_embeddings
         )
 
         # run the model to get the attention weights and post-attention encodings
@@ -250,14 +250,20 @@ class AttentionAnalyzer:
             selected_layer, outputs
         )
 
-        closest_df, closest_outputs_df = self.get_result_dataframes(
-            selected_token,
-            distance_type,
-            input_ids,
-            layer_0_value_encodings,
-            post_attention_encodings,
+        closest_layer_0_df, closest_outputs_df = (
+            self.get_result_dataframes(
+                selected_token,
+                distance_type,
+                input_ids,
+                layer_0_value_encodings,
+                post_attention_encodings,
+            )
         )
-        return (token_display_string, closest_df, closest_outputs_df)
+        return (
+            token_display_string,
+            closest_layer_0_df,
+            closest_outputs_df,
+        )
 
     def get_result_dataframes(
         self,
@@ -269,8 +275,8 @@ class AttentionAnalyzer:
     ):
         """
         Creates dataframes comparing token encodings across attention heads:
-        1. Closest vocabulary tokens to post-attention encoding
-        2. Closest sequence tokens to post-attention encoding
+        1. Closest level 0 vocabulary value encodings to selected token's post-attention encoding
+        2. Closest other sequence tokens to selected token's post-attention encoding
         """
         num_heads = self.transformer.config.num_attention_heads
         vocab_distances_df = []
@@ -312,31 +318,44 @@ class AttentionAnalyzer:
             pd.concat(sequence_distances_df, axis=1),
         )
 
-    def get_token_journey(self, text, token_position, selected_layer):
+    def get_token_journey(self, text, token_position, layer, head):
         inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
+        input_ids = inputs["input_ids"].squeeze(0)
+        outputs = self.transformer.model(**inputs)
         if token_position is None:
             token_position = 1
-        outputs = self.transformer.model(**inputs)
+        token_id = input_ids[token_position]
+        token_str = self.transformer.tokenizer.convert_ids_to_tokens(
+            token_id.unsqueeze(0)
+        )[0]
 
-        input_ids = inputs["input_ids"].squeeze(0)  # shape: [sequence_length]
-        # Get the token ID at the specified position
-        token_id = input_ids[token_position]  # This is a single token ID
-        token_str = self.transformer.tokenizer.convert_ids_to_tokens(token_id.unsqueeze(0))[0]
+        # Start with initial embedding and project it to head size
+        initial_embedding = outputs.hidden_states[0].squeeze(0)[token_position].detach()
+        # Reshape to match head size
+        head_size = self.transformer.head_size
+        initial_embedding = initial_embedding.view(
+            -1, self.transformer.config.num_attention_heads, head_size
+        )[0, head]
+        embeddings = [initial_embedding]  # Start list with initial embedding
 
-        embeddings = [
-            states[0, token_position].detach()
-            for states in outputs.hidden_states
-        ]
+        # Then get post-attention encodings for each layer
+        num_layers = self.transformer.config.num_hidden_layers
+        for layer_idx in range(num_layers):
+            post_attention = self.compute_post_attention_values(layer_idx, outputs)
+            embeddings.append(post_attention[token_position, head].detach())
+
         # Get all tokens at current layer
-        # Shape: [sequence_length, hidden_size]
-        all_tokens_current_layer = outputs.hidden_states[selected_layer + 1][0].detach()
+        current_layer_post_attention = self.compute_post_attention_values(
+            layer, outputs
+        )
+        all_tokens_current_layer = current_layer_post_attention[:, head].detach()
 
         return {
             "embeddings": embeddings,
             "all_current": all_tokens_current_layer,
             "token_info": {
-                "id": token_id.item(),  # Convert to Python scalar here
+                "id": token_id.item(),
                 "string": token_str,
-                "position": token_position
-            }
+                "position": token_position,
+            },
         }
