@@ -34,7 +34,7 @@ class AttentionAnalyzerUI:
         setTimeout(() => {
             window.scrollTo(0, 10);
             window.scrollTo(0, 0);
-        }, 1000);
+        }, 1500);
         </script>"""
 
         with gr.Blocks(css=custom_css, head=head) as demo:
