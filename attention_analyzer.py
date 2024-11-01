@@ -311,3 +311,32 @@ class AttentionAnalyzer:
             pd.concat(vocab_distances_df, axis=1),
             pd.concat(sequence_distances_df, axis=1),
         )
+
+    def get_token_journey(self, text, token_position, selected_layer):
+        inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
+        if token_position is None:
+            token_position = 1
+        outputs = self.transformer.model(**inputs)
+
+        input_ids = inputs["input_ids"].squeeze(0)  # shape: [sequence_length]
+        # Get the token ID at the specified position
+        token_id = input_ids[token_position]  # This is a single token ID
+        token_str = self.transformer.tokenizer.convert_ids_to_tokens(token_id.unsqueeze(0))[0]
+
+        embeddings = [
+            states[0, token_position].detach()
+            for states in outputs.hidden_states
+        ]
+        # Get all tokens at current layer
+        # Shape: [sequence_length, hidden_size]
+        all_tokens_current_layer = outputs.hidden_states[selected_layer + 1][0].detach()
+
+        return {
+            "embeddings": embeddings,
+            "all_current": all_tokens_current_layer,
+            "token_info": {
+                "id": token_id.item(),  # Convert to Python scalar here
+                "string": token_str,
+                "position": token_position
+            }
+        }

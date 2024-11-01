@@ -1,4 +1,7 @@
 import gradio as gr
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.decomposition import PCA
 
 from attention_analyzer import AttentionAnalyzer
 
@@ -16,6 +19,74 @@ class AttentionAnalyzerUI:
             if position != -1:
                 intro_markdown = intro_markdown[position:]
         return intro_markdown
+
+    def update_tabs(self, text, tokens, selected_layer, distance_type, use_positional, head_selector):
+        """
+        Update the tabs with the new data.
+        """
+        selected_token_str, combined_dataframe, intertoken_dataframe = (
+            self.analyzer.closest_to_all_values(
+                text, tokens, selected_layer, distance_type, use_positional
+            )
+        )
+        pca_plot = self.create_pca_plot(text, tokens, selected_layer, head_selector)
+        return selected_token_str, combined_dataframe, intertoken_dataframe, pca_plot
+
+    def create_pca_plot(self, text, token_idx, layer):
+        """
+        Visualize token's journey through layers using PCA.
+        """
+        # Get the token's embeddings through layers and all tokens at current layer
+        journey_data = self.analyzer.get_token_journey(text, token_idx, layer)
+        embeddings = journey_data["embeddings"]
+        token_info = journey_data["token_info"]
+
+        # Convert embeddings to numpy array for PCA
+        embedding_array = np.stack([e.numpy() for e in embeddings])
+
+        # Combine journey points and current layer points for PCA
+        all_points = np.concatenate([
+            embedding_array,  # Journey points
+            journey_data["all_current"].numpy()  # All tokens at current layer
+        ])
+
+        # Apply PCA
+        pca = PCA(n_components=2)
+        all_transformed = pca.fit_transform(all_points)
+
+        # Split back into journey and current layer points
+        n_journey = len(embedding_array)
+        journey_points = all_transformed[:n_journey]
+        current_layer_points = all_transformed[n_journey:]
+
+        # Create plot
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        # Plot current layer context points in gray
+        ax.scatter(current_layer_points[:, 0], current_layer_points[:, 1],
+                    color='gray', alpha=0.3, label='Other encodings at layer {layer}')
+
+        # Plot journey points in blue
+        ax.scatter(journey_points[:, 0], journey_points[:, 1],
+                    color='blue', alpha=0.5, label='Current encoding across all layers')
+
+        # Highlight current layer in red
+        ax.scatter(journey_points[layer + 1, 0], journey_points[layer + 1, 1],
+                    color='red', s=100, label=f'Layer {layer}')
+
+        # Add layer numbers next to points
+        for i, (x, y) in enumerate(journey_points):
+            label = "Initial" if i == 0 else f"L{i-1}"
+            ax.annotate(label, (x, y), xytext=(5, 5), textcoords='offset points')
+
+        ax.set_title(f'Token "{token_info["string"]}" Journey Through Layers')
+        ax.set_xlabel('First PCA Component')
+        ax.set_ylabel('Second PCA Component')
+        ax.legend()
+        ax.grid(True)
+        ax.set_aspect('equal')
+
+        return fig
 
     def update_token_display(self, text):
         tokens = self.analyzer.get_tokens_for_text(text)
@@ -82,47 +153,82 @@ class AttentionAnalyzerUI:
                     label="Selected Token", show_label=True, scale=0
                 )
 
-            with gr.Row():
-                combined_dataframe = gr.DataFrame(
-                    label="Nearest initial token value encodings to selected post-attention token encoding",
-                    show_label=True,
-                    elem_classes="combined",
-                    col_count=12,
-                    headers=[f"head {head}" for head in range(12)],
-                )
-            with gr.Row():
-                intertoken_dataframe = gr.DataFrame(
-                    label="Nearest sequence position post-attention encodings (shown as original tokens at that position)",
-                    show_label=True,
-                    elem_classes="combined",
-                    col_count=12,
-                    headers=[f"head {head}" for head in range(12)],
-                )
+            with gr.Tabs():
+                with gr.Tab("Distances"):
+                    with gr.Row():
+                        combined_dataframe = gr.DataFrame(
+                            label="Nearest initial token value encodings to selected post-attention token encoding",
+                            show_label=True,
+                            elem_classes="combined",
+                            col_count=12,
+                            headers=[f"head {head}" for head in range(12)],
+                        )
+                    with gr.Row():
+                        intertoken_dataframe = gr.DataFrame(
+                            label="Nearest sequence position post-attention encodings (shown as original tokens at that position)",
+                            show_label=True,
+                            elem_classes="combined",
+                            col_count=12,
+                            headers=[f"head {head}" for head in range(12)],
+                        )
+                with gr.Tab("Journey"):
+                    head_selector = gr.Dropdown(
+                        choices=range(12),
+                        label="Attention Head",
+                        show_label=True,
+                        value=0
+                    )
+                    pca_plot = gr.Plot()
 
             tokens.click(
-                fn=self.analyzer.closest_to_all_values,
-                inputs=[text, tokens, selected_layer, distance_type, use_positional],
-                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+                fn=self.update_tabs,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional, head_selector],
+                outputs=[
+                    selected_token_str,
+                    combined_dataframe,
+                    intertoken_dataframe,
+                    pca_plot,
+                ],
             )
             selected_layer.change(
-                fn=self.analyzer.closest_to_all_values,
-                inputs=[text, tokens, selected_layer, distance_type, use_positional],
-                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+                fn=self.update_tabs,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional, head_selector],
+                outputs=[
+                    selected_token_str,
+                    combined_dataframe,
+                    intertoken_dataframe,
+                    pca_plot,
+                ],
             )
             distance_type.change(
-                fn=self.analyzer.closest_to_all_values,
-                inputs=[text, tokens, selected_layer, distance_type, use_positional],
-                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+                fn=self.update_tabs,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional, head_selector],
+                outputs=[
+                    selected_token_str,
+                    combined_dataframe,
+                    intertoken_dataframe,
+                    pca_plot,
+                ],
             )
             use_positional.change(
-                fn=self.analyzer.closest_to_all_values,
-                inputs=[text, tokens, selected_layer, distance_type, use_positional],
-                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+                fn=self.update_tabs,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional, head_selector],
+                outputs=[
+                    selected_token_str,
+                    combined_dataframe,
+                    intertoken_dataframe,
+                    pca_plot,
+                ],
             )
             demo.load(
-                fn=self.analyzer.closest_to_all_values,
-                inputs=[text, tokens, selected_layer, distance_type, use_positional],
-                outputs=[selected_token_str, combined_dataframe, intertoken_dataframe],
+                fn=self.update_tabs,
+                inputs=[text, tokens, selected_layer, distance_type, use_positional, head_selector],
+                outputs=[
+                    selected_token_str,
+                    combined_dataframe,
+                    intertoken_dataframe,
+                    pca_plot,
+                ],
             )
 
             show_tokens.click(
