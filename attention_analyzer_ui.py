@@ -15,7 +15,7 @@ class AttentionAnalyzerUI:
         # read in README.md and strip out metadata if present
         with open("./README.md", "r") as file:
             intro_markdown = file.read()
-            position = intro_markdown.find("# From Tokens to Tensors")
+            position = intro_markdown.find("# Distributed")
             if position != -1:
                 intro_markdown = intro_markdown[position:]
         return intro_markdown

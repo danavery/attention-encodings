@@ -1,6 +1,6 @@
 Current demo available [here](https://demo.danavery.com/attention-encodings).
 
-# From Tokens to Tensors: Rethinking Layered Representation in Transformer Models
+# Distributed Far and Wide: Rethinking Layered Representation in Transformer Models
 
 ## Introduction
 
