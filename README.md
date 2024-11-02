@@ -89,10 +89,11 @@ Interestingly—and somewhat unexpectedly—head 7 preserves much of the origina
 
 The results here suggest that later token encodings are not linked to their original tokens, and that information is distributed among all encodings at each layer. *Attention layers seem to be using the sequence positions solely as tools to group and mix information between encodings from the very beginning*, rather than preserving individual feature identities.
 
-This raises a couple of interesting possibilities:
+This raises a few interesting possibilities:
 
 * *The number of encodings at each layer doesn't need to be fixed.* While architectures like CNNs and fully-connected networks benefit from varying neuron counts across layers, transformers might also benefit from experimenting with different numbers of output encodings per layer.
 * *The dimensionality of the encodings doesn't need to be fixed between layers.* Since the attention layers seem to be using the sequence positions to group and mix information between encodings from the very beginning, rather than preserving individual feature identities, there appears to be no obvious reason to keep the encoding dimensionality fixed (at 768 in BERT's case).
+* If one of the primary breakthroughs of attention layers is that they act primarily like feed-forward networks, but by manipulating tensors rather than scalars, this means that *attention mechanisms might be useful in other types of networks*. Other architectures could be enhanced by adding group-wise combination to their existing scalar operations.
 
 Though there are potential efficiency challenges, I'm going to cleverly wave my hands in a distracting way and note that it's an area ripe for exploration. If transformers are indeed less focused on token-specific identity than widely believed, this could open up new avenues in architecture design, especially around flexibility in layer structure and dimensionality.
 
@@ -101,6 +102,6 @@ Though there are potential efficiency challenges, I'm going to cleverly wave my 
 
 - **Models**: Exploring other models like GPT-2 (especially with the causal attention mask disabled) might reveal whether this mixing behavior is unique to RoBERTa or common across transformer architectures.
 - **Comparisons**: While it doesn't make as much obvious sense as comparing post-attention encodings to value encodings, comparing them with key or query vocabulary encodings could be interesting.
-- **Attention Weights**: Exploring per-head attention weights could shed light on each head’s specific role in information distribution and token blending, though displaying this in the UI presents a challenge due to space.
+- **Attention Weights**: Exploring per-head attention weights could shed light on each head’s specific role in information distribution and token blending, though displaying this in the UI presents a challenge due to space constraints.
 
 I believe these insights offer a fresh perspective on transformers and open up intriguing directions for future research. Any feedback welcome! Feel free to get in touch at [encodings@danavery.com](mailto:encodings@danavery.com)!
