@@ -1,3 +1,4 @@
+(3 Nov 2024: Demo is offline for a minor revision in the next 24-48 hours)
 Current demo available [here](https://demo.danavery.com/attention-encodings).
 
 # Distributed Far and Wide: Rethinking Layered Representation in Transformer Models
