@@ -24,13 +24,23 @@ class AttentionAnalyzerUI:
         """
         Update the tabs with the new data.
         """
+        residual_distance_dataframe = self.analyzer.get_residual_distances_df(
+            text, tokens, distance_type, use_positional
+        )
+
         selected_token_str, combined_dataframe, intertoken_dataframe = (
             self.analyzer.closest_to_all_values(
                 text, tokens, selected_layer, distance_type, use_positional
             )
         )
         pca_plot = self.create_pca_plot(text, tokens, selected_layer, head_selector)
-        return selected_token_str, combined_dataframe, intertoken_dataframe, pca_plot
+        return (
+            selected_token_str,
+            combined_dataframe,
+            intertoken_dataframe,
+            pca_plot,
+            residual_distance_dataframe,
+        )
 
     def create_pca_plot(self, text, token_idx, layer, head):
         """
@@ -149,6 +159,15 @@ class AttentionAnalyzerUI:
             with gr.Tabs():
                 with gr.Tab("Distances"):
                     with gr.Row():
+                        residual_distance_dataframe = gr.DataFrame(
+                            label="Distance between the post-attention layer residual output and the original vocabulary token embeddings",
+                            show_label=True,
+                            elem_classes="combined",
+                            col_count=12,
+                            headers=[f"layer {layer}" for layer in range(12)],
+                        )
+                with gr.Tab("Attention Deltas"):
+                    with gr.Row():
                         combined_dataframe = gr.DataFrame(
                             label="Nearest initial token value encodings to selected post-attention token encoding",
                             show_label=True,
@@ -181,6 +200,7 @@ class AttentionAnalyzerUI:
                     combined_dataframe,
                     intertoken_dataframe,
                     pca_plot,
+                    residual_distance_dataframe,
                 ],
             )
             selected_layer.change(
@@ -191,6 +211,7 @@ class AttentionAnalyzerUI:
                     combined_dataframe,
                     intertoken_dataframe,
                     pca_plot,
+                    residual_distance_dataframe,
                 ],
             )
             distance_type.change(
@@ -201,6 +222,7 @@ class AttentionAnalyzerUI:
                     combined_dataframe,
                     intertoken_dataframe,
                     pca_plot,
+                    residual_distance_dataframe,
                 ],
             )
             use_positional.change(
@@ -211,6 +233,7 @@ class AttentionAnalyzerUI:
                     combined_dataframe,
                     intertoken_dataframe,
                     pca_plot,
+                    residual_distance_dataframe,
                 ],
             )
             head_selector.change(
@@ -221,6 +244,7 @@ class AttentionAnalyzerUI:
                     combined_dataframe,
                     intertoken_dataframe,
                     pca_plot,
+                    residual_distance_dataframe,
                 ],
             )
             demo.load(
@@ -231,6 +255,7 @@ class AttentionAnalyzerUI:
                     combined_dataframe,
                     intertoken_dataframe,
                     pca_plot,
+                    residual_distance_dataframe,
                 ],
             )
 

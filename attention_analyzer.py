@@ -117,8 +117,10 @@ class AttentionAnalyzer:
     def get_closest_vocabulary_tokens(
         self,
         reference_encoding,
-        layer_0_value_encodings,
+        base_encodings,
         selected_token_id,
+        other_token_ids=[],
+        show_other_tokens=False,
         k=15,
         distance_type="Cosine",
     ):
@@ -127,9 +129,11 @@ class AttentionAnalyzer:
         Returns list of strings formatted with rank numbers and distances.
 
         Args:
-            reference_encoding: Post-attention encoding for selected token
-            layer_0_value_encodings: Vocabulary encodings for this attention head
+            reference_encoding: Post-attention encoding for selected token or residual output
+            base_encodings: Vocabulary encodings to compare to (either layer 0 value encodings or raw vocab embeddings)
             selected_token_id: Token ID of the selected token to find its rank
+            other_token_ids: Token IDs of other tokens to always include in the results
+            show_other_tokens: Whether to show other tokens in the results at all. Currently false because it hasn't proven useful yet.
             k: Number of closest tokens to return (default 15)
             distance_type: Distance metric to use (default "Cosine")
 
@@ -139,7 +143,7 @@ class AttentionAnalyzer:
         """
         # Get all distances and sorted indices
         all_distances, all_indices = self._find_closest_encodings(
-            reference_encoding, layer_0_value_encodings, distance_type
+            reference_encoding, base_encodings, distance_type
         )
 
         # Find rank of selected token
@@ -151,7 +155,7 @@ class AttentionAnalyzer:
 
         # Convert to token strings and format with ranks
         token_strings = self.transformer.tokenizer.convert_ids_to_tokens(
-            indices.tolist()
+            all_indices.tolist()
         )
         result_strings = [
             ("▶" if indices[i] == selected_token_id else "")
@@ -159,14 +163,15 @@ class AttentionAnalyzer:
             for i, (token, dist) in enumerate(zip(token_strings, distances))
         ]
         # Add original token if not in top k
-        if selected_token_rank > k:
-            selected_token_str = self.transformer.tokenizer.convert_ids_to_tokens(
-                [selected_token_id]
-            )[0]
-            result_strings.append(
-                f"▶{selected_token_rank}. {selected_token_str} ({all_distances[selected_token_rank-1]:.3f})"
-            )
-
+        for index in range(k, len(all_indices)):
+            if all_indices[index] == selected_token_id:
+                result_strings.append(
+                    f"▶{index+1}. {token_strings[index]} ({all_distances[index]:.3f})"
+                )
+            elif all_indices[index] in other_token_ids:
+                result_strings.append(
+                    f"•{index+1}. {token_strings[index]} ({all_distances[index]:.3f})"
+                )
         return result_strings
 
     def get_closest_sequence_tokens(
@@ -250,14 +255,12 @@ class AttentionAnalyzer:
             selected_layer, outputs
         )
 
-        closest_layer_0_df, closest_outputs_df = (
-            self.get_result_dataframes(
-                selected_token,
-                distance_type,
-                input_ids,
-                layer_0_value_encodings,
-                post_attention_encodings,
-            )
+        closest_layer_0_df, closest_outputs_df = self.get_result_dataframes(
+            selected_token,
+            distance_type,
+            input_ids,
+            layer_0_value_encodings,
+            post_attention_encodings,
         )
         return (
             token_display_string,
@@ -359,3 +362,86 @@ class AttentionAnalyzer:
                 "position": token_position,
             },
         }
+
+    def get_residual_distances(
+        self, text, token_position, distance_type, use_positional
+    ):
+        inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
+        input_ids = inputs["input_ids"].squeeze(0)
+        outputs = self.transformer.model(**inputs)
+        if token_position is None:
+            token_position = 1
+        token_id = input_ids[token_position]
+        token_str = self.transformer.tokenizer.convert_ids_to_tokens(
+            token_id.unsqueeze(0)
+        )[0]
+
+        # we have the outputs of the model, and the string for the token
+        # at the selected position. Now we need to get the output of the residual
+        # addition of the current layer's input embedding and the concatenated
+        # post-attention output so we can compare the output of the residual
+        # connection to the initial token embedding
+
+        residual_output_distances = {}
+        for layer in range(self.transformer.config.num_hidden_layers):
+            # get the post-attention encodings for all tokens at the selected layer
+            post_attention_encodings = self.compute_post_attention_values(
+                layer, outputs
+            )
+            # get the post-attention encodings for the selected position
+            concatenated_heads = post_attention_encodings[token_position].reshape(-1)
+
+            # get the context weights for the selected layer
+            layer_context_weights = self.transformer.get_layer_context_weights(layer)
+
+            # multiply the concatenated heads by the context weights
+            context_output = concatenated_heads @ layer_context_weights
+
+            # get the input embedding for the selected position
+            layer_input = outputs.hidden_states[layer][0, token_position]
+
+            # add the context output and the input embedding to get the residual output
+            layer_output = context_output + layer_input
+
+            # get the embeddings for the original vocabulary tokens
+            # (optionally including positional embeddings)
+            comparison_encodings = self.transformer.get_raw_vocab_embeddings(
+                selected_token_idx=token_position,
+                apply_positional_embeddings=use_positional,
+            )
+
+            # get the closest vocabulary encodings to the residual output
+            closest_tokens = self.get_closest_vocabulary_tokens(
+                layer_output,
+                comparison_encodings,
+                token_id,
+                other_token_ids=input_ids,
+                k=self.k,
+                distance_type=distance_type,
+            )
+            residual_output_distances[f"layer {layer}"] = closest_tokens
+
+        return residual_output_distances
+
+    def get_residual_distances_df(
+        self, text, selected_token, distance_type, use_positional
+    ):
+        distances = self.get_residual_distances(
+            text, selected_token, distance_type, use_positional
+        )
+        # Find max length across all layers
+        max_length = max(len(layer_results) for layer_results in distances.values())
+
+        # Pad each layer's results to max_length
+        for layer in distances:
+            current_length = len(distances[layer])
+            if current_length < max_length:
+                distances[layer].extend([""] * (max_length - current_length))
+
+        return pd.DataFrame(
+            distances,
+            columns=[
+                f"layer {layer}"
+                for layer in range(self.transformer.config.num_hidden_layers)
+            ],
+        )
