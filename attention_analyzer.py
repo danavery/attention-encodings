@@ -146,9 +146,6 @@ class AttentionAnalyzer:
             reference_encoding, base_encodings, distance_type
         )
 
-        # Find rank of selected token
-        selected_token_rank = (all_indices == selected_token_id).nonzero()[0].item() + 1
-
         # Take top k
         distances = all_distances[:k]
         indices = all_indices[:k]
@@ -162,13 +159,13 @@ class AttentionAnalyzer:
             + f"{i+1}. {token} ({dist:.3f})"
             for i, (token, dist) in enumerate(zip(token_strings, distances))
         ]
-        # Add original token if not in top k
+
         for index in range(k, len(all_indices)):
             if all_indices[index] == selected_token_id:
                 result_strings.append(
                     f"▶{index+1}. {token_strings[index]} ({all_distances[index]:.3f})"
                 )
-            elif all_indices[index] in other_token_ids:
+            elif show_other_tokens and all_indices[index] in other_token_ids:
                 result_strings.append(
                     f"•{index+1}. {token_strings[index]} ({all_distances[index]:.3f})"
                 )
@@ -212,7 +209,6 @@ class AttentionAnalyzer:
             f"{i+1}. {token} ({dist:.3f})"
             for i, (token, dist) in enumerate(zip(token_strings, all_distances))
         ]
-
         return result_strings
 
     def closest_to_all_values(
@@ -382,6 +378,13 @@ class AttentionAnalyzer:
         # post-attention output so we can compare the output of the residual
         # connection to the initial token embedding
 
+        # get the embeddings for the original vocabulary tokens
+        # (optionally including positional embeddings)
+        comparison_encodings = self.transformer.get_raw_vocab_embeddings(
+            selected_token_idx=token_position,
+            apply_positional_embeddings=use_positional,
+        )
+
         residual_output_distances = {}
         for layer in range(self.transformer.config.num_hidden_layers):
             # get the post-attention encodings for all tokens at the selected layer
@@ -402,13 +405,6 @@ class AttentionAnalyzer:
 
             # add the context output and the input embedding to get the residual output
             layer_output = context_output + layer_input
-
-            # get the embeddings for the original vocabulary tokens
-            # (optionally including positional embeddings)
-            comparison_encodings = self.transformer.get_raw_vocab_embeddings(
-                selected_token_idx=token_position,
-                apply_positional_embeddings=use_positional,
-            )
 
             # get the closest vocabulary encodings to the residual output
             closest_tokens = self.get_closest_vocabulary_tokens(
@@ -445,3 +441,61 @@ class AttentionAnalyzer:
                 for layer in range(self.transformer.config.num_hidden_layers)
             ],
         )
+
+    def get_token_residual_journey(self, text, token_position, layer):
+        inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
+        input_ids = inputs["input_ids"].squeeze(0)
+        outputs = self.transformer.model(**inputs)
+        if token_position is None:
+            token_position = 1
+        token_id = input_ids[token_position]
+        token_str = self.transformer.tokenizer.convert_ids_to_tokens(
+            token_id.unsqueeze(0)
+        )[0]
+
+        # Start with initial embedding and project it to head size
+        initial_embedding = outputs.hidden_states[0].squeeze(0)[token_position].detach()
+        embeddings = [initial_embedding]  # Start list with initial embedding
+
+        # Then get post-attention encodings for each layer
+        num_layers = self.transformer.config.num_hidden_layers
+        for layer_idx in range(num_layers):
+            # Get post-attention encodings and concatenate heads for the selected position
+            post_attention = self.compute_post_attention_values(layer_idx, outputs)
+            concatenated_heads = post_attention[token_position].reshape(-1)
+
+            # Apply context weights to the concatenated heads
+            layer_context_weights = self.transformer.get_layer_context_weights(layer_idx)
+            context_output = concatenated_heads @ layer_context_weights
+
+            # Add the context output and the input embedding to get the residual output
+            layer_input = outputs.hidden_states[layer_idx][0, token_position]
+            layer_output = context_output + layer_input
+
+            embeddings.append(layer_output.detach())
+
+        # Get all tokens at current layer
+        post_attention_encodings = self.compute_post_attention_values(layer, outputs)
+        concatenated_heads = post_attention_encodings.reshape(
+            post_attention_encodings.size(0), -1
+        )  # reshape for all tokens
+        layer_context_weights = self.transformer.get_layer_context_weights(layer)
+        context_output = concatenated_heads @ layer_context_weights
+        layer_input = outputs.hidden_states[layer][0]  # all tokens
+        all_tokens_current_layer = (context_output + layer_input).detach()
+
+        # Print distances from initial to each layer output
+        print(f"\nDistances from initial embedding for token {token_str}:")
+        for i, emb in enumerate(embeddings[1:], 1):  # Skip first since it's initial
+            dist = 1 - F.cosine_similarity(embeddings[0], emb, dim=0)
+            print(f"Layer {i-1}: {dist.item():.3f}")
+
+        return {
+            "embeddings": embeddings,
+            "all_current": all_tokens_current_layer,
+            "token_info": {
+                "id": token_id.item(),
+                "string": token_str,
+                "position": token_position,
+            },
+        }

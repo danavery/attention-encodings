@@ -20,34 +20,44 @@ class AttentionAnalyzerUI:
                 intro_markdown = intro_markdown[position:]
         return intro_markdown
 
-    def update_tabs(self, text, tokens, selected_layer, distance_type, use_positional, head_selector):
+    def update_tabs(self, text, selected_token, selected_layer, distance_type, use_positional, head_selector):
         """
         Update the tabs with the new data.
         """
         residual_distance_dataframe = self.analyzer.get_residual_distances_df(
-            text, tokens, distance_type, use_positional
+            text, selected_token, distance_type, use_positional
         )
 
         selected_token_str, combined_dataframe, intertoken_dataframe = (
             self.analyzer.closest_to_all_values(
-                text, tokens, selected_layer, distance_type, use_positional
+                text, selected_token, selected_layer, distance_type, use_positional
             )
         )
-        pca_plot = self.create_pca_plot(text, tokens, selected_layer, head_selector)
+        per_head_pca_plot = self.create_per_head_pca_plot(text, selected_token, selected_layer, head_selector)
+        residual_pca_plot = self.create_residual_pca_plot(text, selected_token, selected_layer)
         return (
             selected_token_str,
             combined_dataframe,
             intertoken_dataframe,
-            pca_plot,
+            per_head_pca_plot,
+            residual_pca_plot,
             residual_distance_dataframe,
         )
 
-    def create_pca_plot(self, text, token_idx, layer, head):
+    def create_per_head_pca_plot(self, text, selected_token, selected_layer, head):
+        journey_data = self.analyzer.get_token_journey(text, selected_token, selected_layer, head)
+        return self.create_pca_plot(selected_layer, journey_data)
+
+    def create_residual_pca_plot(self, text, selected_token, selected_layer):
+        journey_data = self.analyzer.get_token_residual_journey(text, selected_token, selected_layer)
+        return self.create_pca_plot(selected_layer, journey_data)
+
+    def create_pca_plot(self, layer, journey_data):
         """
         Visualize token's journey through layers using PCA.
         """
-        # Get the token's embeddings through layers and all tokens at current layer
-        journey_data = self.analyzer.get_token_journey(text, token_idx, layer, head)
+        # # Get the token's embeddings through layers and all tokens at current layer
+        # journey_data = self.analyzer.get_token_journey(text, token_idx, layer, head)
         embeddings = journey_data["embeddings"]
         token_info = journey_data["token_info"]
 
@@ -190,7 +200,9 @@ class AttentionAnalyzerUI:
                         show_label=True,
                         value=0
                     )
-                    pca_plot = gr.Plot()
+                    per_head_pca_plot = gr.Plot()
+                with gr.Tab("Residual Journey"):
+                    residual_pca_plot = gr.Plot()
 
             tokens.click(
                 fn=self.update_tabs,
@@ -199,7 +211,8 @@ class AttentionAnalyzerUI:
                     selected_token_str,
                     combined_dataframe,
                     intertoken_dataframe,
-                    pca_plot,
+                    per_head_pca_plot,
+                    residual_pca_plot,
                     residual_distance_dataframe,
                 ],
             )
@@ -210,7 +223,8 @@ class AttentionAnalyzerUI:
                     selected_token_str,
                     combined_dataframe,
                     intertoken_dataframe,
-                    pca_plot,
+                    per_head_pca_plot,
+                    residual_pca_plot,
                     residual_distance_dataframe,
                 ],
             )
@@ -221,7 +235,8 @@ class AttentionAnalyzerUI:
                     selected_token_str,
                     combined_dataframe,
                     intertoken_dataframe,
-                    pca_plot,
+                    per_head_pca_plot,
+                    residual_pca_plot,
                     residual_distance_dataframe,
                 ],
             )
@@ -232,7 +247,8 @@ class AttentionAnalyzerUI:
                     selected_token_str,
                     combined_dataframe,
                     intertoken_dataframe,
-                    pca_plot,
+                    per_head_pca_plot,
+                    residual_pca_plot,
                     residual_distance_dataframe,
                 ],
             )
@@ -243,7 +259,8 @@ class AttentionAnalyzerUI:
                     selected_token_str,
                     combined_dataframe,
                     intertoken_dataframe,
-                    pca_plot,
+                    per_head_pca_plot,
+                    residual_pca_plot,
                     residual_distance_dataframe,
                 ],
             )
@@ -254,7 +271,8 @@ class AttentionAnalyzerUI:
                     selected_token_str,
                     combined_dataframe,
                     intertoken_dataframe,
-                    pca_plot,
+                    per_head_pca_plot,
+                    residual_pca_plot,
                     residual_distance_dataframe,
                 ],
             )
