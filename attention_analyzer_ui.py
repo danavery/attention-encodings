@@ -27,23 +27,14 @@ class AttentionAnalyzerUI:
         selected_layer,
         distance_type,
         use_positional,
-        head_selector,
     ):
         """
         Update the tabs with the new data.
         """
-        residual_distance_dataframe = self.analyzer.get_residual_distances_df(
+        token_string, residual_distance_dataframe = self.analyzer.get_residual_distances_df(
             text, selected_token, distance_type, use_positional
         )
 
-        selected_token_str, combined_dataframe, intertoken_dataframe = (
-            self.analyzer.closest_to_all_values(
-                text, selected_token, selected_layer, distance_type, use_positional
-            )
-        )
-        per_head_pca_plot = self.create_per_head_pca_plot(
-            text, selected_token, selected_layer, head_selector
-        )
         residual_pca_plot = self.create_residual_pca_plot(
             text, selected_token, selected_layer
         )
@@ -55,12 +46,9 @@ class AttentionAnalyzerUI:
         )
 
         return (
-            selected_token_str,
-            combined_dataframe,
-            intertoken_dataframe,
-            per_head_pca_plot,
-            residual_pca_plot,
+            token_string,
             residual_distance_dataframe,
+            residual_pca_plot,
             residual_distance_plot,
             residual_rank_plot,
         )
@@ -123,12 +111,6 @@ class AttentionAnalyzerUI:
         ax.legend()
 
         return fig
-
-    def create_per_head_pca_plot(self, text, selected_token, selected_layer, head):
-        journey_data = self.analyzer.get_token_journey(
-            text, selected_token, selected_layer, head
-        )
-        return self.create_pca_plot(selected_layer, journey_data)
 
     def create_residual_pca_plot(self, text, selected_token, selected_layer):
         journey_data = self.analyzer.get_token_residual_journey(
@@ -199,15 +181,6 @@ class AttentionAnalyzerUI:
 
         return fig
 
-    def create_distance_plot(self, distances, token_str):
-        fig, ax = plt.subplots()
-        ax.plot(range(len(distances)), distances, "b-o")
-        ax.set_xlabel("Layer")
-        ax.set_ylabel("Distance from Initial Embedding")
-        ax.set_title(f"Distance from initial embedding for token {token_str}")
-        ax.grid(True)
-        return fig
-
     def update_token_display(self, text):
         tokens = self.analyzer.get_tokens_for_text(text)
         return gr.update(samples=tokens, components=["text"])
@@ -237,13 +210,7 @@ class AttentionAnalyzerUI:
                     scale=4,
                     label="Input text",
                 )
-                selected_layer = gr.Dropdown(
-                    choices=range(12),
-                    label="Layer number (0-11)",
-                    show_label=True,
-                    value=0,
-                    scale=0,
-                )
+
                 distance_type = gr.Dropdown(
                     choices=["Euclidean", "Cosine"],
                     label="Distance type",
@@ -283,32 +250,14 @@ class AttentionAnalyzerUI:
                             col_count=12,
                             headers=[f"layer {layer}" for layer in range(12)],
                         )
-                with gr.Tab("Attention Deltas"):
-                    with gr.Row():
-                        combined_dataframe = gr.DataFrame(
-                            label="Nearest initial token value encodings to selected post-attention token encoding",
-                            show_label=True,
-                            elem_classes="combined",
-                            col_count=12,
-                            headers=[f"head {head}" for head in range(12)],
-                        )
-                    with gr.Row():
-                        intertoken_dataframe = gr.DataFrame(
-                            label="Nearest sequence position post-attention encodings (shown as original tokens at that position)",
-                            show_label=True,
-                            elem_classes="combined",
-                            col_count=12,
-                            headers=[f"head {head}" for head in range(12)],
-                        )
-                with gr.Tab("Journey"):
-                    head_selector = gr.Dropdown(
+                with gr.Tab("Residual Journey"):
+                    selected_layer = gr.Dropdown(
                         choices=range(12),
-                        label="Attention Head",
+                        label="Layer number (0-11)",
                         show_label=True,
                         value=0,
+                        scale=0,
                     )
-                    per_head_pca_plot = gr.Plot()
-                with gr.Tab("Residual Journey"):
                     residual_pca_plot = gr.Plot()
                 with gr.Tab("Residual Distance Journey"):
                     residual_distance_plot = gr.Plot()
@@ -323,15 +272,11 @@ class AttentionAnalyzerUI:
                     selected_layer,
                     distance_type,
                     use_positional,
-                    head_selector,
                 ],
                 "outputs": [
                     selected_token_str,
-                    combined_dataframe,
-                    intertoken_dataframe,
-                    per_head_pca_plot,
-                    residual_pca_plot,
                     residual_distance_dataframe,
+                    residual_pca_plot,
                     residual_distance_plot,
                     residual_rank_plot,
                 ],
@@ -342,7 +287,6 @@ class AttentionAnalyzerUI:
             selected_layer.change(**update_handler_params)
             distance_type.change(**update_handler_params)
             use_positional.change(**update_handler_params)
-            head_selector.change(**update_handler_params)
             demo.load(**update_handler_params)
 
             show_tokens.click(

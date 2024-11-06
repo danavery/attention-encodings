@@ -30,27 +30,7 @@ class AttentionAnalyzer:
             )
         else:
             raise ValueError(f"Invalid distance type: {distance_type}")
-
-    def get_layer_value_encodings(self, layer=0, apply_positional_embeddings=True):
-        layer_value_weights = self.transformer.get_layer_value_weights(layer)
-
-        # get normalized vocab embeddings and project to value space
-        return self.project_to_value_by_head(
-            self.transformer.get_normalized_vocab_embeddings(
-                apply_positional_embeddings=apply_positional_embeddings
-            ),
-            layer_value_weights,
-        )
-
-    def project_to_value_by_head(self, embeddings, value_weights):
-        x = embeddings @ value_weights
-        # reshape into individual head value encodings
-        x_heads = x.view(
-            x.size(0),
-            self.transformer.config.num_attention_heads,
-            self.transformer.head_size,
-        )
-        return x_heads
+    # keep
 
     def compute_post_attention_values(self, selected_layer, outputs):
         """
@@ -99,6 +79,7 @@ class AttentionAnalyzer:
 
         return post_attn_layer_encodings
 
+    #keep
     def _find_closest_encodings(
         self,
         reference_encoding,  # the post-attention encoding we're comparing from
@@ -114,6 +95,7 @@ class AttentionAnalyzer:
         all_distances, all_indices = torch.sort(distances, descending=False)
         return all_distances, all_indices
 
+    # keep
     def get_closest_vocabulary_tokens(
         self,
         reference_encoding,
@@ -170,194 +152,6 @@ class AttentionAnalyzer:
                     f"•{index+1}. {token_strings[index]} ({all_distances[index]:.3f})"
                 )
         return result_strings
-
-    def get_closest_sequence_tokens(
-        self,
-        reference_encoding,
-        post_attention_encodings,
-        input_ids,  # needed to convert positions to token IDs
-        selected_position,  # position in sequence we're comparing from
-        distance_type="Cosine",
-    ):
-        """
-         Find closest sequence tokens to the reference encoding.
-         Returns list of strings formatted with rank numbers and distances.
-
-         Args:
-        reference_encoding: Post-attention encoding for selected token
-        post_attention_encodings: Encodings for all tokens in sequence
-        input_ids: Tensor mapping positions to token IDs
-        selected_position: Position in sequence of selected token
-        distance_type: Distance metric to use (default "Cosine")
-
-         Returns:
-             List of strings formatted as "rank. token (distance)" for all sequence tokens
-        """
-        # Get all distances and sorted indices (these are sequence positions)
-        all_distances, position_indices = self._find_closest_encodings(
-            reference_encoding, post_attention_encodings, distance_type
-        )
-
-        # Convert positions to token IDs then to strings
-        token_ids = input_ids[position_indices]
-        token_strings = self.transformer.tokenizer.convert_ids_to_tokens(
-            token_ids.tolist()
-        )
-
-        # Format all results (we want all sequence tokens)
-        result_strings = [
-            f"{i+1}. {token} ({dist:.3f})"
-            for i, (token, dist) in enumerate(zip(token_strings, all_distances))
-        ]
-        return result_strings
-
-    def closest_to_all_values(
-        self,
-        text="Time flies like an arrow.",
-        selected_token=1,
-        selected_layer=0,
-        distance_type="Cosine",
-        apply_positional_embeddings=True,
-    ):
-        """
-        Computes and returns the closest token encodings to a specified token's
-        post-attention encoding across all attention heads at a specified layer.
-
-        The closeness between encodings is measured in the embedding space using
-        either Euclidean or Cosine distance.
-        """
-        # if you click on something that's not a token first, Gradio supplies None as selected_token
-        # which is suboptimal
-        if selected_token is None:
-            selected_token = 1
-        logging.debug(f"{selected_token=}")
-        self.transformer.adjust_vocab_to_token_position(selected_token)
-
-        inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
-        input_ids = inputs["input_ids"].squeeze(0)  # <seq_len>, don't need batch dim
-
-        token_display_string = f"{self.transformer.tokenizer.convert_ids_to_tokens(input_ids[selected_token].item())} ({input_ids[selected_token]})"
-
-        # get all value encodings for all tokens at layer 0
-        layer_0_value_encodings = self.get_layer_value_encodings(
-            layer=0, apply_positional_embeddings=apply_positional_embeddings
-        )
-
-        # run the model to get the attention weights and post-attention encodings
-        outputs = self.transformer.model(**inputs)
-
-        # get the post-attention encodings for all tokens at the selected layer
-        post_attention_encodings = self.compute_post_attention_values(
-            selected_layer, outputs
-        )
-
-        closest_layer_0_df, closest_outputs_df = self.get_result_dataframes(
-            selected_token,
-            distance_type,
-            input_ids,
-            layer_0_value_encodings,
-            post_attention_encodings,
-        )
-        return (
-            token_display_string,
-            closest_layer_0_df,
-            closest_outputs_df,
-        )
-
-    def get_result_dataframes(
-        self,
-        selected_token,
-        distance_type,
-        input_ids,
-        layer_0_value_encodings,
-        post_attention_encodings,
-    ):
-        """
-        Creates dataframes comparing token encodings across attention heads:
-        1. Closest level 0 vocabulary value encodings to selected token's post-attention encoding
-        2. Closest other sequence tokens to selected token's post-attention encoding
-        """
-        num_heads = self.transformer.config.num_attention_heads
-        vocab_distances_df = []
-        sequence_distances_df = []
-
-        for head in range(num_heads):
-            # Compare to level 0 vocabulary value encodings
-            vocab_comparisons = self.get_closest_vocabulary_tokens(
-                post_attention_encodings[selected_token, head, :],
-                layer_0_value_encodings[:, head, :],
-                input_ids[selected_token],
-                k=self.k,
-                distance_type=distance_type,
-            )
-            vocab_distances_df.append(
-                pd.DataFrame(
-                    vocab_comparisons,
-                    columns=[f"head {head}"],
-                )
-            )
-
-            # Compare to other sequence token encodings in the selected layer's post-attention outputs
-            sequence_comparisons = self.get_closest_sequence_tokens(
-                post_attention_encodings[selected_token, head, :],
-                post_attention_encodings[:, head, :],
-                input_ids,
-                selected_token,
-                distance_type=distance_type,
-            )
-            sequence_distances_df.append(
-                pd.DataFrame(
-                    sequence_comparisons,
-                    columns=[f"head {head}"],
-                )
-            )
-
-        return (
-            pd.concat(vocab_distances_df, axis=1),
-            pd.concat(sequence_distances_df, axis=1),
-        )
-
-    def get_token_journey(self, text, token_position, layer, head):
-        inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
-        input_ids = inputs["input_ids"].squeeze(0)
-        outputs = self.transformer.model(**inputs)
-        if token_position is None:
-            token_position = 1
-        token_id = input_ids[token_position]
-        token_str = self.transformer.tokenizer.convert_ids_to_tokens(
-            token_id.unsqueeze(0)
-        )[0]
-
-        # Start with initial embedding and project it to head size
-        initial_embedding = outputs.hidden_states[0].squeeze(0)[token_position].detach()
-        # Reshape to match head size
-        head_size = self.transformer.head_size
-        initial_embedding = initial_embedding.view(
-            -1, self.transformer.config.num_attention_heads, head_size
-        )[0, head]
-        embeddings = [initial_embedding]  # Start list with initial embedding
-
-        # Then get post-attention encodings for each layer
-        num_layers = self.transformer.config.num_hidden_layers
-        for layer_idx in range(num_layers):
-            post_attention = self.compute_post_attention_values(layer_idx, outputs)
-            embeddings.append(post_attention[token_position, head].detach())
-
-        # Get all tokens at current layer
-        current_layer_post_attention = self.compute_post_attention_values(
-            layer, outputs
-        )
-        all_tokens_current_layer = current_layer_post_attention[:, head].detach()
-
-        return {
-            "embeddings": embeddings,
-            "all_current": all_tokens_current_layer,
-            "token_info": {
-                "id": token_id.item(),
-                "string": token_str,
-                "position": token_position,
-            },
-        }
 
     def get_residual_distances(
         self, text, token_position, distance_type, use_positional
@@ -417,12 +211,12 @@ class AttentionAnalyzer:
             )
             residual_output_distances[f"layer {layer}"] = closest_tokens
 
-        return residual_output_distances
+        return token_str, residual_output_distances
 
     def get_residual_distances_df(
         self, text, selected_token, distance_type, use_positional
     ):
-        distances = self.get_residual_distances(
+        token_str, distances = self.get_residual_distances(
             text, selected_token, distance_type, use_positional
         )
         # Find max length across all layers
@@ -434,7 +228,7 @@ class AttentionAnalyzer:
             if current_length < max_length:
                 distances[layer].extend([""] * (max_length - current_length))
 
-        return pd.DataFrame(
+        return token_str, pd.DataFrame(
             distances,
             columns=[
                 f"layer {layer}"
