@@ -5,25 +5,19 @@ Current demo available [here](https://demo.danavery.com/attention-encodings).
 
 ## Introduction
 
-This experiment challenges conventional assumptions, suggesting that transformers may not retain hierarchical interpretability across layers as often assumed.
+This experiment provides an exploratory look into the transformation of individual sequence tokens across the attention layers of a pre-trained RoBERTa model. The focus is on understanding the immediate post-attention output for specific sequence positions and identifying the "nearest" vocabulary tokens in the value encoding space.
 
-This quick experiment offers an exploratory look into the transformation of individual sequence tokens across the attention layers of a pre-trained RoBERTa model. The focus is on understanding the immediate post-attention output for a specific sequence position and identifying the "nearest" vocabulary tokens in the value encoding space.
-
-Descriptions of the transformer architecture typically assume that later token encodings have a direct and specific relationship to each originating token--they are thought to transform into more general or abstract concepts as they progress through layers. But this is not what we see here.
+Descriptions of transformer architecture often assume that later token encodings have a direct and specific relationship to each originating token, gradually transforming into more abstract or generalized concepts. This holds true for the most part in this analysis—but there are some intriguing exceptions.
 
 ## Key Findings
 
-1. Starting from the first layer, post-attention encodings show high distances to their original value encodings and to semantically related tokens in the vocabulary.
-2. The entire group of encodings at each layer moves drastically around the value space at each layer, but they all stay tightly bound to each other.
-3. PCA visualization reveals this collective movement pattern starts immediately and persists through all layers.
+1. *Token Movement Through Layers:* Token encodings shift both toward and away from their original embeddings as they progress through the transformer layers. This movement is measured by the number of tokens closer to each encoding than its original embedding.
+2. *Context vs. Function Words:* By the final layer, context-dependent words—those that rely on surrounding words to define their meaning—deviate significantly from their original embeddings, conceptually drifting far from their initial representations. In contrast, function words, like "and" or "the," remain much closer to their original embeddings, indicating that the attention mechanism alters their rankings minimally.
+3. *Encoding Space Density:* Interestingly, the cosine distances between the original embeddings and the final layer embeddings show only slight variation between context and function words. This suggests that context words may occupy a denser region in the encoding space than function words, potentially accounting for their larger shifts in relative rankings.
+4. *Radical Shift in Layer 5:* In this RoBERTa model, layer 5 exhibits a dramatic shift, pushing token encodings far from their original embeddings. However, by layer 6, they revert closer to their initial positions. Whether this is a particular quirk of the RoBERTa model or a general property of transformers is unclear. It's also unclear if the shift implies a particular recontextualization action or is simply a place where the model goes "off-track" temporarily. The layer 5 shift happens regardless of the token sequence processed.
 
-This behavior suggests that the attention layers are using the sequence positions solely as tools to group and mix information between encodings from the very beginning, rather than preserving individual token identities. The attention layers seem to be distributing information widely across the sequence rather than building up more sophisticated representations of the original tokens.
+This behavior suggests that while the attention layers impact the rankings of "context" words more than function words, this may be attributed more to differences in encoding space density for the two types of tokens than to inherent differences in movement of tokens through the encoding space.
 
-The evidence is primarily in:
-
-* The increasing distances to original value encodings
-* The tight clustering and collective movement pattern
-* The lack of preserved semantic relationships
 
 ## Usage Instructions
 

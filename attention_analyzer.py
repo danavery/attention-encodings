@@ -442,7 +442,9 @@ class AttentionAnalyzer:
             ],
         )
 
-    def get_token_residual_journey(self, text, token_position, layer):
+    def get_token_residual_journey(
+        self, text, token_position, layer, distance_type="Cosine"
+    ):
         inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
         input_ids = inputs["input_ids"].squeeze(0)
         outputs = self.transformer.model(**inputs)
@@ -465,7 +467,9 @@ class AttentionAnalyzer:
             concatenated_heads = post_attention[token_position].reshape(-1)
 
             # Apply context weights to the concatenated heads
-            layer_context_weights = self.transformer.get_layer_context_weights(layer_idx)
+            layer_context_weights = self.transformer.get_layer_context_weights(
+                layer_idx
+            )
             context_output = concatenated_heads @ layer_context_weights
 
             # Add the context output and the input embedding to get the residual output
@@ -485,10 +489,10 @@ class AttentionAnalyzer:
         all_tokens_current_layer = (context_output + layer_input).detach()
 
         # Print distances from initial to each layer output
-        print(f"\nDistances from initial embedding for token {token_str}:")
-        for i, emb in enumerate(embeddings[1:], 1):  # Skip first since it's initial
-            dist = 1 - F.cosine_similarity(embeddings[0], emb, dim=0)
-            print(f"Layer {i-1}: {dist.item():.3f}")
+        # print(f"\nDistances from initial embedding for token {token_str}:")
+        # for i, emb in enumerate(embeddings[1:], 1):  # Skip first since it's initial
+        #     dist = 1 - F.cosine_similarity(embeddings[0], emb, dim=0)
+        #     print(f"Layer {i-1}: {dist.item():.3f}")
 
         return {
             "embeddings": embeddings,
@@ -498,4 +502,107 @@ class AttentionAnalyzer:
                 "string": token_str,
                 "position": token_position,
             },
+        }
+
+    def get_all_residual_token_distances(self, text, selected_token, distance_type="Cosine"):
+        # Setup
+        if selected_token is None:
+            selected_token = 1  # Default to first real token (after <s>)
+
+        inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
+        input_ids = inputs["input_ids"].squeeze(0)
+        outputs = self.transformer.model(**inputs)
+        num_layers = self.transformer.config.num_hidden_layers
+
+        # Track distances for all tokens
+        distances_by_token = {}
+        token_strings = {}
+
+        # Calculate distances for each token position
+        for pos in range(len(input_ids)):
+            # Get token info
+            tok_id = input_ids[pos]
+            tok_str = self.transformer.tokenizer.convert_ids_to_tokens(tok_id.unsqueeze(0))[0]
+            token_strings[pos] = tok_str
+
+            # Get initial embedding for this token
+            initial = outputs.hidden_states[0].squeeze(0)[pos].detach()
+            token_distances = []
+
+            # Calculate distance at each layer
+            for layer_idx in range(num_layers):
+                # Get layer output for this token
+                post_attention = self.compute_post_attention_values(layer_idx, outputs)
+                concatenated_heads = post_attention[pos].reshape(-1)
+                layer_context_weights = self.transformer.get_layer_context_weights(layer_idx)
+                context_output = concatenated_heads @ layer_context_weights
+                layer_input = outputs.hidden_states[layer_idx][0, pos]
+                layer_output = context_output + layer_input
+
+                # Calculate distance from initial embedding
+                dist = self.get_distances(initial, layer_output.unsqueeze(0), distance_type).item()
+                token_distances.append(dist)
+
+            distances_by_token[pos] = token_distances
+
+        return {
+            "all_distances": distances_by_token,
+            "token_strings": token_strings,
+            "selected_token": selected_token,
+            "distance_type": distance_type
+        }
+
+    def get_all_token_rankings(self, text, selected_token, distance_type="Cosine"):
+        # Setup
+        if selected_token is None:
+            selected_token = 1  # Default to first real token (after <s>)
+        inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
+        input_ids = inputs["input_ids"].squeeze(0)
+        outputs = self.transformer.model(**inputs)
+        num_layers = self.transformer.config.num_hidden_layers
+
+        # Track rankings for all tokens
+        rankings_by_token = {}
+        token_strings = {}
+
+        # Calculate rankings for each token position
+        for pos in range(len(input_ids)):
+            # Get token info
+            tok_id = input_ids[pos]
+            tok_str = self.transformer.tokenizer.convert_ids_to_tokens(tok_id.unsqueeze(0))[0]
+            token_strings[pos] = tok_str
+
+            # Get initial embedding for this token
+            initial = outputs.hidden_states[0].squeeze(0)[pos].detach()
+            token_rankings = []
+
+            # Calculate ranking at each layer
+            for layer_idx in range(num_layers):
+                # Get layer output for this token
+                post_attention = self.compute_post_attention_values(layer_idx, outputs)
+                concatenated_heads = post_attention[pos].reshape(-1)
+                layer_context_weights = self.transformer.get_layer_context_weights(layer_idx)
+                context_output = concatenated_heads @ layer_context_weights
+                layer_input = outputs.hidden_states[layer_idx][0, pos]
+                layer_output = context_output + layer_input
+
+                # Get distances to all vocab embeddings
+                vocab_embeddings = self.transformer.get_raw_vocab_embeddings(
+                    selected_token_idx=pos,
+                    apply_positional_embeddings=False  # Since we're looking for original token
+                )
+                distances = self.get_distances(layer_output.unsqueeze(0), vocab_embeddings, distance_type)
+
+                # Sort distances and find rank of original token
+                sorted_indices = torch.argsort(distances)
+                rank = (sorted_indices == tok_id).nonzero().item()
+                token_rankings.append(rank)
+
+            rankings_by_token[pos] = token_rankings
+
+        return {
+            "all_rankings": rankings_by_token,
+            "token_strings": token_strings,
+            "selected_token": selected_token,
+            "distance_type": distance_type
         }
