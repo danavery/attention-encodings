@@ -78,6 +78,11 @@ This methodology provides a comprehensive view of how token representations evol
   * Cosine similarity produces more interpretable results
   * Applied between complete layer outputs and vocabulary embeddings
 
+* Positional Encoding Effects:
+  * Comparing embeddings with and without positional encoding shows relatively small differences
+  * It's a good demonstration of how positional encodings are designed to inform but not dominate token meanings
+  * Rankings shift enough to encode position information while preserving core relationships between tokens
+
 Using RoBERTa-base from Hugging Face:
 
 * 12 attention layers

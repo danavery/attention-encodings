@@ -10,6 +10,8 @@ class AttentionAnalyzerUI:
     def __init__(self, analyzer: AttentionAnalyzer):
         self.analyzer = analyzer
         self.k = analyzer.k
+        self.sim_fig = None
+        self.rank_fig = None
 
     def get_intro_markdown(self):
         # read in README.md and strip out metadata if present
@@ -30,7 +32,7 @@ class AttentionAnalyzerUI:
         Update the tabs with the new data.
         """
         residual_metrics = self.analyzer.get_all_token_metrics(
-            text, selected_token
+            text, selected_token, use_positional
         )
         token_string, residual_distance_dataframe = (
             self.analyzer.get_residual_distances_df(residual_metrics, selected_token)
@@ -47,8 +49,9 @@ class AttentionAnalyzerUI:
         )
 
     def create_residual_rank_plot(self, residual_metrics):
-
-        fig, ax = plt.subplots(figsize=(10, 6))
+        if hasattr(self, "rank_fig"):
+            plt.close(self.rank_fig)
+        rank_fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot each token's ranking journey
         for pos, rankings in residual_metrics["all_rankings"].items():
@@ -82,10 +85,12 @@ class AttentionAnalyzerUI:
         ax.grid(True)
         ax.legend()
 
-        return fig
+        return rank_fig
 
     def create_residual_similarity_plot(self, residual_metrics):
-        fig, ax = plt.subplots(figsize=(10, 6))
+        if hasattr(self, "sim_fig"):
+            plt.close(self.sim_fig)
+        sim_fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot each token's journey
         for pos, similarities in residual_metrics["all_distances"].items():  # we should rename this dict key too
@@ -101,7 +106,7 @@ class AttentionAnalyzerUI:
         ax.grid(True)
         ax.legend()
 
-        return fig
+        return sim_fig
 
     def update_token_display(self, text):
         tokens = self.analyzer.get_tokens_for_text(text)

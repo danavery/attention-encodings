@@ -25,11 +25,12 @@ class AttentionAnalyzer:
     def __init__(self, transformer, k=15):
         self.transformer = transformer
         self.k = k
-        self._setup_index()
+        self._setup_indexes()
 
-    def _setup_index(self, f=768):
+    def _setup_indexes(self, f=768):
+        self.indexes = {}
         f = self.transformer.config.hidden_size  # 768
-        self.index = faiss.IndexFlatIP(
+        index = faiss.IndexFlatIP(
             f
         )  # inner product of normalized vectors = cosine similarity
         vocab_embeddings = (
@@ -39,7 +40,22 @@ class AttentionAnalyzer:
             .detach()
             .numpy()
         )
-        self.index.add(vocab_embeddings)
+        index.add(vocab_embeddings)
+        self.indexes["raw"] = index
+
+        index = faiss.IndexFlatIP(
+            f
+        )  # inner product of normalized vectors = cosine similarity
+        vocab_embeddings = (
+            self.transformer.get_raw_vocab_embeddings(
+                selected_token_idx=0, apply_positional_embeddings=True
+            )
+            .detach()
+            .numpy()
+        )
+        index.add(vocab_embeddings)
+        self.indexes["positional"] = index
+
 
     def get_tokens_for_text(self, text):
         inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
@@ -221,7 +237,7 @@ class AttentionAnalyzer:
             ],
         )
 
-    def get_all_token_metrics(self, text, selected_token, distance_type="Cosine"):
+    def get_all_token_metrics(self, text, selected_token, use_positional=False):
         # Setup
         if selected_token is None:
             selected_token = 1  # Default to first real token (after <s>)
@@ -229,6 +245,7 @@ class AttentionAnalyzer:
         input_ids = inputs["input_ids"].squeeze(0)
         outputs = self.transformer.model(**inputs)
         num_layers = self.transformer.config.num_hidden_layers
+        index = self.indexes["raw" if not use_positional else "positional"]
 
         # Track metrics for all tokens
         distances_by_token = {}
@@ -271,7 +288,7 @@ class AttentionAnalyzer:
                 layer_output = layer_output.detach()
 
                 # Use FAISS to get distances and rankings
-                D, I = self.index.search(
+                D, I = index.search(
                     layer_output.unsqueeze(0), self.transformer.config.vocab_size
                 )
                 faiss_results.append((D, I))  # Store raw results
@@ -296,5 +313,4 @@ class AttentionAnalyzer:
             "token_ids": input_ids,
             "faiss_results": faiss_results_by_token,
             "selected_token": selected_token,
-            "distance_type": distance_type,
         }
