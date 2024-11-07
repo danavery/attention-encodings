@@ -1,4 +1,3 @@
-(3 Nov 2024: Demo is offline for a minor revision in the next 24-48 hours)
 Current demo available [here](https://demo.danavery.com/attention-encodings).
 
 # Distributed Far and Wide: Rethinking Layered Representation in Transformer Models
@@ -18,46 +17,82 @@ Descriptions of transformer architecture often assume that later token encodings
 
 This behavior suggests that while the attention layers impact the rankings of "context" words more than function words, this may be attributed more to differences in encoding space density for the two types of tokens than to inherent differences in movement of tokens through the encoding space.
 
-
 ## Usage Instructions
 
 1. Input some text to be tokenized. Hit return or click "Tokenize"
 2. Click on one of the displayed tokens
-3. Choose a layer number (0-11) to see:
-    * How far the token's encoding has moved from related vocabulary terms
-    * How tightly it clusters with other sequence tokens
-4. Use the Journey tab to visualize how the token moves with its sequence through the layers for each head
-5. Switch between distance metrics and toggle positional embeddings to explore different aspects of the clustering
+3. In the "Distances" tab:
+    * See the rankings of, and distances to, the token's encoding against the original token embeddings.
+4. In the "Residual Journey" tab:
+    * Choose a layer number (0-11) to see how the token's encoding moves through the layers relative to itself and the other tokens in the sequence in the same layer
+        * See how far the token's encoding has moved from related vocabulary terms
+        * See how tightly it clusters with other sequence tokens
+5. In the "Residual Distance Journey" tab:
+    * See how the cosine distance changes between the token's encoding and the original token embeddings as the token moves through the layers
+    <!-- * Toggle "Use positional embeddings" to see how the distance rankings change when the token's positional embedding is added to the vocabulary embeddings -->
+6. In the "Residual Rank Journey" tab:
+    * See how the rank of the token's encoding changes relative to the original token embeddings as the token moves through the layers
+    <!-- * Toggle "Use positional embeddings" to see how the rank rankings change when the token's positional embedding is added to the vocabulary embeddings -->
 
 ## Methodology
 
-To understand how token encodings evolve through attention layers, we analyze them in two ways:
+To understand how token representations evolve through transformer layers, we analyze them in three complementary ways:
 
-1. Distance Measurements
-    * Compare post-attention encodings to the initial vocabulary embeddings projected into value space
-        * The encodings considered are post-attention, but pre-concatenation and feed-forward network
-        * The Hugging Face API doesn’t natively offer these encodings. To obtain them, output encodings from the preceding layer are projected into the value space and then the attention weights are applied.
-    * Track how quickly token encodings diverge from semantically related terms
-    * Measure distances to tokens that had similar meanings in the original embedding space
+1. Layer-by-Layer Distances
+    * For each layer, examine the complete output after:
+        * Attention mechanism processes the token
+        * Attention head outputs are concatenated
+        * Residual connection adds the layer input
+    * Compare this full layer output against the original vocabulary embeddings
+    * Track how token representations maintain or lose their connection to their original meanings
+    * Measure distances to all tokens in the original vocabulary
 
-2. PCA Visualization
-    * Project the high-dimensional token encodings into 2D space
-    * Track a single token's journey through all layers
-    * Show other tokens' encodings at the current layer to reveal clustering
-    * Observe how entire clusters move between layers
+2. Distance Plot
+    * Track how far each token's representation moves from its original embedding
+    * Compare movement patterns between different types of tokens (e.g., content vs. function words)
+    * Observe patterns in how representations evolve through the network
+    * Identify critical layers where significant transformations occur
 
-This reveals both the loss of original semantic relationships and the emergence of tight sequence-level clustering from the very first layer.
+3. PCA Visualization
+    * Project the high-dimensional token representations into 2D space
+    * Observe a token's journey through all layers
+    * Show other sequence tokens at the current layer to reveal clustering patterns
+    * Visualize how token representations move relative to each other
+
+Implementation Details:
+
+* For each selected token and layer:
+
+  * Compute the post-attention outputs for all heads
+  * Concatenate these outputs together
+  * Add the residual connection (layer input)
+  * Compare this complete layer output against the original vocabulary embeddings
+  * Optionally include positional embeddings in the comparison
+
+* Rankings and distances show how close the layer output remains to the token's original meaning
+* This analysis reveals both information preservation and transformation through the network
+
+This methodology provides a comprehensive view of how token representations evolve, showing both the gradual drift from original meanings and the emergence of context-dependent relationships between tokens.
 
 ## Technical Notes
 
-* The encodings considered are post-attention, but pre-concatenation and feed-forward network.
-* The Hugging Face API doesn’t natively offer these encodings. To obtain them, output encodings from the preceding layer are projected into the value space and then the attention weights are applied.
-* For the specified token:
-    * If "Use positional embeddings" is selected, the corresponding positional embedding is added to all vocabulary embeddings. Since adding positional embeddings causes significant changes to the original token embedding, it seems best to add the selected token's positional embedding to the entire vocabulary, but the option is provided to skip this step.
-    * The resulting vocabulary encodings are then projected into the transformer's Value space at the input layer. This way they stay roughly in the same conceptual space (i.e., their original high-dimensional structure) as the original tokens, and closer to the space of the post-attention encodings.
-    * By comparing the post-attention encoding against this set, the tokens corresponding to the "closest" token embeddings are displayed.
-    * This procedure is replicated for each attention head.
-    * Distances are also computed from the selected post-attention mechanism token encoding at the selected layer to all sequence tokens at the same layer.
+* Analysis occurs before layer normalization and feed-forward processing in each transformer layer
+
+* Position encoding options:
+  * When enabled, adds the token's position encoding to all vocabulary embeddings
+  * Required for fair comparison since layer outputs include position information
+  * Can be disabled to see position-independent relationships
+
+* Distance calculations:
+  * Implemented with both cosine and Euclidean metrics
+  * Cosine distance produces more interpretable results
+  * Applied between complete layer outputs and vocabulary embeddings
+
+Using RoBERTa-base from Hugging Face:
+
+* 12 attention layers
+* Hidden size of 768
+* 12 attention heads
 
 ## Why RoBERTa?
 
@@ -65,38 +100,35 @@ RoBERTa was chosen due to its encoder-based architecture. Additionally, avoiding
 
 ## Interpretation
 
-Conventional descriptions of transformer architectures suggest that higher-level encodings might correlate to some broad, interpretable concepts derived from the original token embeddings. But the evidence suggests something different.
+The conventional descriptions of transformer architecture suggest that later token encodings have a direct and specific relationship to their original tokens, gradually transforming into more abstract or generalized concepts. This holds true for the most part in this analysis—but there are some intriguing exceptions.
 
-1. From the first layer, tokens show high distances to their original value encodings and to semantically-related terms
-2. Rather than developing interpretable features, the encodings appear to immediately begin distributing information across all sequence positions
-3. Entire groups of encodings move dramatically through the embedding space together, maintaining tight clustering but losing individual semantic meaning
+There are two ways to think of "distance" in this analysis:
 
-This behavior is more reminiscent of how feed-forward networks distribute information throughout their layers than the commonly assumed hierarchical feature development. The sequence positions appear to function primarily as containers for distributed information rather than as carriers of increasingly sophisticated token-level meaning, just as in feed-forward networks, except these networks manipulate tensors rather than scalar values. This also introduces the same issues with interpretability as feed-forward networks.
+1. Similarity Ranking: The number of vocabulary tokens that are closer to the token's current encoding at a particular layer than to the original token embedding.
+2. Distance: The measured cosine or Euclidean distance between the token's current encoding at a particular layer and the original token embedding.
 
-This distributed structure suggests that transformers’ representations may not have the clear, hierarchical interpretability often ascribed to them. Instead of building up abstract features from concrete ones, they seem to immediately begin mixing information across all positions in service of processing the sequence as a whole.
+In the first case, "context" words, which have more inherent "meaning" and are more likely to be related to other words in the sequence, appear to deviate significantly from their original embeddings. There are more original vocabulary tokens between their current location and their original one. This implies that they are conceptually drifting far from their initial representations. In contrast, function words, like "and" or "the," remain much closer to their original embedding rankings, implying that the attention mechanism alters their meaning minimally.
 
-Intriguingly, **the first layer often creates new token encodings that are closer to the value encoding of another token in the sequence** than to the original token. For example, in 'Time flies like an arrow, fruit flies like a banana,' using cosine distance, the token 'Time' moves immediately away from its original meaning and clusters with its sequence neighbors in four of the twelve heads, showing how quickly the distribution of information begins.
+However, in the case of explicit distance from their original embeddings, the differences are much smaller. The context words still have a higher distance than the function words, but the difference is not as stark. This implies that the "context" words are in a denser region of the encoding space than the function words, so their relative meaning changes much faster per unit of distance--they're moving through and past many other vocabulary tokens
 
-Interestingly—and somewhat unexpectedly—head 7 preserves much of the original token encoding for the first layer. But it's not preserved for the next layer or certainly any later layers.
+Interestingly, there's a strange shift that happens in layer 5. The context words don't move much at all in the rankings against their original embeddings, but the function words make large jumps. Then, by layer 6, the function words revert back to their original rankings, while the context words stay roughly where they are. What's going on here? Is this just an artifact of this particular RoBERTa model, or does it say something deeper about how the attention mechanism works? Is there some sort of realignment happening in the encoding space that's causing this, and why does it only affect function words?
 
+Also, layer 11, the final layer, is actually where the function and context words diverge the most their behavior. The context words take huge downwards jumps in the similarity rankings, and the function words stay roughly where they are. That layer appears to be doing more work at determining "meaning" than any of the previous layers, apart from the strange layer 5.
 
 ## Personal Thoughts
 
-The results here suggest that later token encodings are not linked to their original tokens, and that information is distributed among all encodings at each layer. *Attention layers seem to be using the sequence positions solely as tools to group and mix information between encodings from the very beginning*, rather than preserving individual feature identities.
+The results here largely confirm the general accepted idea that attention layers move token encodings away from their original meanings, and towards some sort of mixed representation that incorporates information from the entire sequence. But only for the context words. The function words seems to be largely unaffected by the attention mechanism. This implies that the attention mechanism doesn't pay much attention to the function words, and concentrates on the context words instead.
 
-This raises a few interesting possibilities:
+This could suggest that function words/tokens could be using processing resources out of proportion to their importance to the model. Perhaps the attention mechanism could be improved by tweaking it to pay more attention to, and more resources on,context words. But as you can see from the results, the difference in behavior between context and function words doesn't become obvious until later layers.
 
-* *The number of encodings at each layer doesn't need to be fixed.* While architectures like CNNs and fully-connected networks benefit from varying neuron counts across layers, transformers might also benefit from experimenting with different numbers of output encodings per layer.
-* *The dimensionality of the encodings doesn't need to be fixed between layers.* Since the attention layers seem to be using the sequence positions to group and mix information between encodings from the very beginning, rather than preserving individual feature identities, there appears to be no obvious reason to keep the encoding dimensionality fixed (at 768 in BERT's case).
-* If one of the primary breakthroughs of attention layers is that they act primarily like feed-forward networks, but by manipulating tensors rather than scalars, this means that *attention mechanisms might be useful in other types of networks*. Other architectures could be enhanced by adding group-wise combination to their existing scalar operations.
+One of those later layers where the context and function words differ hugely is layer 5. It's also the first layer that seems to show much differentiation between context and function words' movements. Why is that? What's going on in layer 5 that causes such a drastic shift in behavior? Is this where the model determines which tokens to *really* pay attention to?
 
-Though there are potential efficiency challenges, I'm going to cleverly wave my hands in a distracting way and note that it's an area ripe for exploration. If transformers are indeed less focused on token-specific identity than widely believed, this could open up new avenues in architecture design, especially around flexibility in layer structure and dimensionality.
-
+The layer 11 jump also looks important. Is that where the model really starts to determine which tokens are important? If so, why does it wait so long? Do all transformer models perform huge leaps in work in the final layers compared to the earlier layers? If so, does that mean that fewer layers might work just as well, or is there a way to make them more important to the model?
 
 ## Future Directions
 
-- **Models**: Exploring other models like GPT-2 (especially with the causal attention mask disabled) might reveal whether this mixing behavior is unique to RoBERTa or common across transformer architectures.
-- **Comparisons**: While it doesn't make as much obvious sense as comparing post-attention encodings to value encodings, comparing them with key or query vocabulary encodings could be interesting.
-- **Attention Weights**: Exploring per-head attention weights could shed light on each head’s specific role in information distribution and token blending, though displaying this in the UI presents a challenge due to space constraints.
+* *Models*: Exploring other models like GPT-2 (especially with the causal attention mask disabled) might reveal whether this behavior--especially the layer 5 and layer 11 shifts--is unique to RoBERTa or common across transformer architectures.
+* *Encoding Grouping*: It could be useful to see if the attention mechanism is moving all of the encodings for a particular sequence in the same "direction" in the embedding space, or moving them closer together or further apart.
+* *Dynamic Attention Allocation*: Determining if function words/tokens are always in a sparser region of the encoding space than context words would be interesting on it's own. But it could allow for some interesting optimizations in the attention mechanism. If the model knows ahead of time that a token is a function word/token (because it's in a sparse region of the encoding space), it could apply fewer attention or computational resources to it.
 
 I believe these insights offer a fresh perspective on transformers and open up intriguing directions for future research. Any feedback welcome! Feel free to get in touch at [encodings@danavery.com](mailto:encodings@danavery.com)!
