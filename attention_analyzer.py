@@ -189,9 +189,7 @@ class AttentionAnalyzer:
 
         return token_str, residual_output_distances
 
-    def get_residual_distances_df(
-        self, residual_metrics, selected_token
-    ):
+    def get_residual_distances_df(self, residual_metrics, selected_token):
         if selected_token is None:
             selected_token = 1
 
@@ -224,68 +222,6 @@ class AttentionAnalyzer:
                 for layer in range(self.transformer.config.num_hidden_layers)
             ],
         )
-
-    def get_token_residual_journey(
-        self, text, token_position, layer, distance_type="Cosine"
-    ):
-        inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
-        input_ids = inputs["input_ids"].squeeze(0)
-        outputs = self.transformer.model(**inputs)
-        if token_position is None:
-            token_position = 1
-        token_id = input_ids[token_position]
-        token_str = self.transformer.tokenizer.convert_ids_to_tokens(
-            token_id.unsqueeze(0)
-        )[0]
-
-        # Start with initial embedding and project it to head size
-        initial_embedding = outputs.hidden_states[0].squeeze(0)[token_position].detach()
-        embeddings = [initial_embedding]  # Start list with initial embedding
-
-        # Then get post-attention encodings for each layer
-        num_layers = self.transformer.config.num_hidden_layers
-        for layer_idx in range(num_layers):
-            # Get post-attention encodings and concatenate heads for the selected position
-            post_attention = self.compute_post_attention_values(layer_idx, outputs)
-            concatenated_heads = post_attention[token_position].reshape(-1)
-
-            # Apply context weights to the concatenated heads
-            layer_context_weights = self.transformer.get_layer_context_weights(
-                layer_idx
-            )
-            context_output = concatenated_heads @ layer_context_weights
-
-            # Add the context output and the input embedding to get the residual output
-            layer_input = outputs.hidden_states[layer_idx][0, token_position]
-            layer_output = context_output + layer_input
-
-            embeddings.append(layer_output.detach())
-
-        # Get all tokens at current layer
-        post_attention_encodings = self.compute_post_attention_values(layer, outputs)
-        concatenated_heads = post_attention_encodings.reshape(
-            post_attention_encodings.size(0), -1
-        )  # reshape for all tokens
-        layer_context_weights = self.transformer.get_layer_context_weights(layer)
-        context_output = concatenated_heads @ layer_context_weights
-        layer_input = outputs.hidden_states[layer][0]  # all tokens
-        all_tokens_current_layer = (context_output + layer_input).detach()
-
-        # Print distances from initial to each layer output
-        # print(f"\nDistances from initial embedding for token {token_str}:")
-        # for i, emb in enumerate(embeddings[1:], 1):  # Skip first since it's initial
-        #     dist = 1 - F.cosine_similarity(embeddings[0], emb, dim=0)
-        #     print(f"Layer {i-1}: {dist.item():.3f}")
-
-        return {
-            "embeddings": embeddings,
-            "all_current": all_tokens_current_layer,
-            "token_info": {
-                "id": token_id.item(),
-                "string": token_str,
-                "position": token_position,
-            },
-        }
 
     def get_all_token_metrics(self, text, selected_token, distance_type="Cosine"):
         # Setup

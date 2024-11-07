@@ -24,7 +24,6 @@ class AttentionAnalyzerUI:
         self,
         text,
         selected_token,
-        selected_layer,
         distance_type,
         use_positional,
     ):
@@ -38,17 +37,12 @@ class AttentionAnalyzerUI:
             self.analyzer.get_residual_distances_df(residual_metrics, selected_token)
         )
 
-        residual_pca_plot = self.create_residual_pca_plot(
-            text, selected_token, selected_layer
-        )
-
         residual_distance_plot = self.create_residual_distance_plot(residual_metrics)
         residual_rank_plot = self.create_residual_rank_plot(residual_metrics)
 
         return (
             token_string,
             residual_distance_dataframe,
-            residual_pca_plot,
             residual_distance_plot,
             residual_rank_plot,
         )
@@ -113,75 +107,6 @@ class AttentionAnalyzerUI:
 
         return fig
 
-    def create_residual_pca_plot(self, text, selected_token, selected_layer):
-        journey_data = self.analyzer.get_token_residual_journey(
-            text, selected_token, selected_layer
-        )
-        return self.create_pca_plot(selected_layer, journey_data)
-
-    def create_pca_plot(self, layer, journey_data):
-        """
-        Visualize token's journey through layers using PCA.
-        """
-        # # Get the token's embeddings through layers and all tokens at current layer
-        # journey_data = self.analyzer.get_token_journey(text, token_idx, layer, head)
-        embeddings = journey_data["embeddings"]
-        token_info = journey_data["token_info"]
-
-        # Convert embeddings to numpy array for PCA
-        embedding_array = np.stack([e.numpy() for e in embeddings])
-
-        # Apply PCA to journey points first
-        pca = PCA(n_components=2)
-        journey_points = pca.fit_transform(embedding_array)
-
-        # Transform current layer points using the same PCA
-        current_layer_points = pca.transform(journey_data["all_current"].numpy())
-
-        # Create plot
-        fig, ax = plt.subplots(figsize=(8, 6))
-
-        # Plot current layer context points in gray
-        ax.scatter(
-            current_layer_points[:, 0],
-            current_layer_points[:, 1],
-            color="gray",
-            alpha=0.3,
-            label=f"Other encodings at layer {layer}",
-        )
-
-        # Plot journey points in blue
-        ax.scatter(
-            journey_points[:, 0],
-            journey_points[:, 1],
-            color="blue",
-            alpha=0.5,
-            label="Token journey",
-        )
-
-        # Highlight current layer in red
-        ax.scatter(
-            journey_points[layer + 1, 0],
-            journey_points[layer + 1, 1],
-            color="red",
-            s=100,
-            label=f"Layer {layer}",
-        )
-
-        # Add layer numbers next to points
-        for i, (x, y) in enumerate(journey_points):
-            label = "Initial" if i == 0 else f"L{i-1}"
-            ax.annotate(label, (x, y), xytext=(5, 5), textcoords="offset points")
-
-        ax.set_title(f'Token "{token_info["string"]}" Journey Through Layers')
-        ax.set_xlabel("First PCA Component")
-        ax.set_ylabel("Second PCA Component")
-        ax.legend()
-        ax.grid(True)
-        ax.set_aspect("equal")
-
-        return fig
-
     def update_token_display(self, text):
         tokens = self.analyzer.get_tokens_for_text(text)
         return gr.update(samples=tokens, components=["text"])
@@ -199,7 +124,7 @@ class AttentionAnalyzerUI:
         setTimeout(() => {
             window.scrollTo(0, 10);
             window.scrollTo(0, 0);
-        }, 1500);
+        }, 4000);
         </script>"""
 
         with gr.Blocks(css=custom_css, head=head) as demo:
@@ -242,7 +167,7 @@ class AttentionAnalyzerUI:
                 )
 
             with gr.Tabs():
-                with gr.Tab("Distances"):
+                with gr.Tab("Distances and Rankings"):
                     with gr.Row():
                         residual_distance_dataframe = gr.DataFrame(
                             label="Distance between the post-attention layer residual output and the original vocabulary token embeddings",
@@ -251,18 +176,9 @@ class AttentionAnalyzerUI:
                             col_count=12,
                             headers=[f"layer {layer}" for layer in range(12)],
                         )
-                with gr.Tab("Residual Journey"):
-                    selected_layer = gr.Dropdown(
-                        choices=range(12),
-                        label="Layer number (0-11)",
-                        show_label=True,
-                        value=0,
-                        scale=0,
-                    )
-                    residual_pca_plot = gr.Plot()
-                with gr.Tab("Residual Distance Journey"):
+                with gr.Tab("Distance across Layers"):
                     residual_distance_plot = gr.Plot()
-                with gr.Tab("Residual Rank Journey"):
+                with gr.Tab("Rankings across Layers"):
                     residual_rank_plot = gr.Plot()
 
             update_handler_params = {
@@ -270,14 +186,12 @@ class AttentionAnalyzerUI:
                 "inputs": [
                     text,
                     tokens,
-                    selected_layer,
                     distance_type,
                     use_positional,
                 ],
                 "outputs": [
                     selected_token_str,
                     residual_distance_dataframe,
-                    residual_pca_plot,
                     residual_distance_plot,
                     residual_rank_plot,
                 ],
@@ -285,7 +199,6 @@ class AttentionAnalyzerUI:
             tokens.click(
                 **update_handler_params,
             )
-            selected_layer.change(**update_handler_params)
             distance_type.change(**update_handler_params)
             use_positional.change(**update_handler_params)
             demo.load(**update_handler_params)
