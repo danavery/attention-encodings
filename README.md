@@ -1,6 +1,6 @@
 Current demo available [here](https://demo.danavery.com/attention-encodings).
 
-# Distributed Far and Wide: Rethinking Layered Representation in Transformer Models
+# Dense Paths and Sparse Trails: Token Encoding Journeys in a Transformer Model
 
 ## Introduction
 
@@ -21,16 +21,12 @@ This behavior suggests that while the attention layers impact the rankings of "c
 
 1. Input some text to be tokenized. Hit return or click "Tokenize"
 2. Click on one of the displayed tokens
-3. In the "Distances" tab:
+3. In the "Distances and Rankings" tab:
     * See the rankings of, and distances to, the token's encoding against the original token embeddings.
-4. In the "Residual Journey" tab:
-    * Choose a layer number (0-11) to see how the token's encoding moves through the layers relative to itself and the other tokens in the sequence in the same layer
-        * See how far the token's encoding has moved from related vocabulary terms
-        * See how tightly it clusters with other sequence tokens
-5. In the "Residual Distance Journey" tab:
+4. In the "Distance across Layers" tab:
     * See how the cosine distance changes between the token's encoding and the original token embeddings as the token moves through the layers
     <!-- * Toggle "Use positional embeddings" to see how the distance rankings change when the token's positional embedding is added to the vocabulary embeddings -->
-6. In the "Residual Rank Journey" tab:
+5. In the "Rankings across Layers" tab:
     * See how the rank of the token's encoding changes relative to the original token embeddings as the token moves through the layers
     <!-- * Toggle "Use positional embeddings" to see how the rank rankings change when the token's positional embedding is added to the vocabulary embeddings -->
 
@@ -52,12 +48,6 @@ To understand how token representations evolve through transformer layers, we an
     * Compare movement patterns between different types of tokens (e.g., content vs. function words)
     * Observe patterns in how representations evolve through the network
     * Identify critical layers where significant transformations occur
-
-3. PCA Visualization
-    * Project the high-dimensional token representations into 2D space
-    * Observe a token's journey through all layers
-    * Show other sequence tokens at the current layer to reveal clustering patterns
-    * Visualize how token representations move relative to each other
 
 Implementation Details:
 
@@ -127,8 +117,8 @@ The layer 11 jump also looks important. Is that where the model really starts to
 
 ## Future Directions
 
-* *Models*: Exploring other models like GPT-2 (especially with the causal attention mask disabled) might reveal whether this behavior--especially the layer 5 and layer 11 shifts--is unique to RoBERTa or common across transformer architectures.
-* *Encoding Grouping*: It could be useful to see if the attention mechanism is moving all of the encodings for a particular sequence in the same "direction" in the embedding space, or moving them closer together or further apart.
-* *Dynamic Attention Allocation*: Determining if function words/tokens are always in a sparser region of the encoding space than context words would be interesting on it's own. But it could allow for some interesting optimizations in the attention mechanism. If the model knows ahead of time that a token is a function word/token (because it's in a sparse region of the encoding space), it could apply fewer attention or computational resources to it.
+* *Models:* Exploring other models like GPT-2 (especially with the causal attention mask disabled) might reveal whether this behavior--especially the layer 5 and layer 11 shifts--is unique to RoBERTa or common across transformer architectures.
+* *Encoding Grouping:* It could be useful to see if the attention mechanism is moving all of the encodings for a particular sequence in the same "direction" in the embedding space, or moving them closer together or further apart.
+* *Dynamic Attention Allocation:* Determining if function words/tokens are always in a sparser region of the encoding space than context words would be interesting on it's own. But it could allow for some interesting optimizations in the attention mechanism. If the model knows ahead of time that a token is a function word/token (because it's in a sparse region of the encoding space), it could apply fewer attention or computational resources to it.
 
 I believe these insights offer a fresh perspective on transformers and open up intriguing directions for future research. Any feedback welcome! Feel free to get in touch at [encodings@danavery.com](mailto:encodings@danavery.com)!
