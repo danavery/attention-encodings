@@ -10,9 +10,9 @@ Descriptions of transformer architecture often assume that later token encodings
 
 ## Key Findings
 
-1. *Token Movement Through Layers:* Token encodings shift both toward and away from their original embeddings as they progress through the transformer layers. This movement is measured by the number of tokens closer to each encoding than its original embedding.
-2. *Context vs. Function Words:* By the final layer, context-dependent words—those that rely on surrounding words to define their meaning—deviate significantly from their original embeddings, conceptually drifting far from their initial representations. In contrast, function words, like "and" or "the," remain much closer to their original embeddings, indicating that the attention mechanism alters their rankings minimally.
-3. *Encoding Space Density:* Interestingly, the cosine similarity between the original embeddings and the final layer embeddings show only slight variation between context and function words. This suggests that context words may occupy a denser region in the encoding space than function words, potentially accounting for their larger shifts in relative rankings.
+1. *Token Movement Through Layers:* Token encodings shift both toward and away from their original embeddings as they progress through the transformer layers. This movement is measured both by the cosine similarity to the original embedding and by the number of tokens closer to the current encoding than its original embedding.
+2. *Context vs. Function Words:* By the final layer, context-dependent words—those that rely on surrounding words to define their meaning—deviate significantly from their original embeddings, conceptually drifting far from their initial representations. In contrast, function words, like "and" or "the," remain much closer to their original embeddings, indicating that the attention mechanism doesn't significantly alter their rankings.
+3. *Encoding Space Density:* Interestingly, the cosine similarity between the original embeddings and the final layer embeddings show only slight variation between context and function words. So while the cosine similarites move in relatively similar ways, the rankings change much more dramatically. This suggests that context words may occupy a denser region in the encoding space than function words.
 4. *Radical Shift in Layer 5:* In this RoBERTa model, layer 5 exhibits a dramatic shift, pushing token encodings far from their original embeddings. However, by layer 6, they revert closer to their initial positions. Whether this is a particular quirk of the RoBERTa model or a general property of transformers is unclear. It's also unclear if the shift implies a particular recontextualization action or is simply a place where the model goes "off-track" temporarily. The layer 5 shift happens regardless of the token sequence processed.
 
 This behavior suggests that while the attention layers impact the rankings of "context" words more than function words, this may be attributed more to differences in encoding space density for the two types of tokens than to inherent differences in movement of tokens through the encoding space.
@@ -68,26 +68,22 @@ This methodology provides a comprehensive view of how token representations evol
 
 * Analysis occurs before layer normalization and feed-forward processing in each transformer layer
 
-* Position encoding options:
+* Position encoding option:
   * When enabled, adds the token's position encoding to all vocabulary embeddings
   * Required for fair comparison since layer outputs include position information
   * Can be disabled to see position-independent relationships
+  * Comparing embeddings with and without positional encoding shows relatively small differences
 
 * Similarity calculations:
   * Originally implemented with both cosine and Euclidean metrics
   * Cosine similarity produces more interpretable results
   * Applied between complete layer outputs and vocabulary embeddings
 
-* Positional Encoding Effects:
-  * Comparing embeddings with and without positional encoding shows relatively small differences
-  * It's a good demonstration of how positional encodings are designed to inform but not dominate token meanings
-  * Rankings shift enough to encode position information while preserving core relationships between tokens
-
-Using RoBERTa-base from Hugging Face:
-
-* 12 attention layers
-* Hidden size of 768
-* 12 attention heads
+* Model:
+  * Using "roberta-base" from Hugging Face:
+    * 12 attention layers
+    * Hidden size of 768
+    * 12 attention heads
 
 ## Why RoBERTa?
 
