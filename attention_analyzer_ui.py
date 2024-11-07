@@ -31,19 +31,19 @@ class AttentionAnalyzerUI:
         """
         Update the tabs with the new data.
         """
-        token_string, residual_distance_dataframe = self.analyzer.get_residual_distances_df(
-            text, selected_token, distance_type, use_positional
+        residual_metrics = self.analyzer.get_all_token_metrics(
+            text, selected_token, distance_type
+        )
+        token_string, residual_distance_dataframe = (
+            self.analyzer.get_residual_distances_df(residual_metrics, selected_token)
         )
 
         residual_pca_plot = self.create_residual_pca_plot(
             text, selected_token, selected_layer
         )
-        residual_distance_plot = self.create_residual_distance_plot(
-            text, selected_token
-        )
-        residual_rank_plot = self.create_residual_rank_plot(
-            text, selected_token
-        )
+
+        residual_distance_plot = self.create_residual_distance_plot(residual_metrics)
+        residual_rank_plot = self.create_residual_rank_plot(residual_metrics)
 
         return (
             token_string,
@@ -53,17 +53,14 @@ class AttentionAnalyzerUI:
             residual_rank_plot,
         )
 
-    def create_residual_rank_plot(self, text, selected_token):
-        all_results = self.analyzer.get_all_token_rankings(
-            text, selected_token
-        )
+    def create_residual_rank_plot(self, residual_metrics):
 
         fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot each token's ranking journey
-        for pos, rankings in all_results["all_rankings"].items():
-            token = all_results["token_strings"][pos]
-            if pos == all_results["selected_token"]:
+        for pos, rankings in residual_metrics["all_rankings"].items():
+            token = residual_metrics["token_strings"][pos]
+            if pos == residual_metrics["selected_token"]:
                 # Selected token - bold blue line with markers
                 ax.plot(range(12), rankings, "b-o", linewidth=2, label=token)
             else:
@@ -71,12 +68,17 @@ class AttentionAnalyzerUI:
                 ax.plot(range(12), rankings, color="gray", alpha=0.3)
 
         # Add token labels at the end of each line
-        for pos, rankings in all_results["all_rankings"].items():
-            token = all_results["token_strings"][pos]
+        for pos, rankings in residual_metrics["all_rankings"].items():
+            token = residual_metrics["token_strings"][pos]
             # Add text slightly offset from the final point
-            ax.annotate(token, (11, rankings[-1]), xytext=(5, 0),
-                        textcoords='offset points', fontsize=8,
-                        alpha=1.0 if pos == all_results["selected_token"] else 0.3)
+            ax.annotate(
+                token,
+                (11, rankings[-1]),
+                xytext=(5, 0),
+                textcoords="offset points",
+                fontsize=8,
+                alpha=1.0 if pos == residual_metrics["selected_token"] else 0.3,
+            )
 
         # Flip y-axis since lower rank = better
         ax.invert_yaxis()
@@ -89,23 +91,22 @@ class AttentionAnalyzerUI:
 
         return fig
 
-    def create_residual_distance_plot(self, text, selected_token):
-        all_results = self.analyzer.get_all_residual_token_distances(
-            text, selected_token
-        )
+    def create_residual_distance_plot(self, residual_metrics):
 
         fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot each token's journey
-        for pos, distances in all_results["all_distances"].items():
-            token = all_results["token_strings"][pos]
-            if pos == all_results["selected_token"]:
+        for pos, distances in residual_metrics["all_distances"].items():
+            token = residual_metrics["token_strings"][pos]
+            if pos == residual_metrics["selected_token"]:
                 ax.plot(range(12), distances, "b-o", linewidth=2, label=token)
             else:
                 ax.plot(range(12), distances, color="gray", alpha=0.3)
 
         ax.set_xlabel("Layer")
-        ax.set_ylabel(f'Distance from Initial Embedding ({all_results["distance_type"]})')
+        ax.set_ylabel(
+            f'Distance from Initial Embedding ({residual_metrics["distance_type"]})'
+        )
         ax.set_title("Token Distances from Initial Embeddings Across Layers")
         ax.grid(True)
         ax.legend()
