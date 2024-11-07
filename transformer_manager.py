@@ -1,5 +1,7 @@
 import logging
-from transformers import AutoModel, AutoTokenizer, AutoConfig
+
+import torch.nn.functional as F
+from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 
 class TransformerManager:
@@ -35,9 +37,9 @@ class TransformerManager:
     def get_raw_vocab_embeddings(self, selected_token_idx=None, apply_positional_embeddings=True ):
         if apply_positional_embeddings:
             self.adjust_vocab_to_token_position(selected_token_idx)
-            return self.position_adjusted_vocab
+            return F.normalize(self.position_adjusted_vocab, p=2, dim=-1)
         else:
-            return self.vocab_base_embeddings
+            return F.normalize(self.vocab_base_embeddings, p=2, dim=-1)
 
     def get_normalized_vocab_embeddings(self, apply_positional_embeddings=True):
         if apply_positional_embeddings:

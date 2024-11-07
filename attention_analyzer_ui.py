@@ -24,20 +24,19 @@ class AttentionAnalyzerUI:
         self,
         text,
         selected_token,
-        distance_type,
         use_positional,
     ):
         """
         Update the tabs with the new data.
         """
         residual_metrics = self.analyzer.get_all_token_metrics(
-            text, selected_token, distance_type
+            text, selected_token
         )
         token_string, residual_distance_dataframe = (
             self.analyzer.get_residual_distances_df(residual_metrics, selected_token)
         )
 
-        residual_distance_plot = self.create_residual_distance_plot(residual_metrics)
+        residual_distance_plot = self.create_residual_similarity_plot(residual_metrics)
         residual_rank_plot = self.create_residual_rank_plot(residual_metrics)
 
         return (
@@ -85,23 +84,20 @@ class AttentionAnalyzerUI:
 
         return fig
 
-    def create_residual_distance_plot(self, residual_metrics):
-
+    def create_residual_similarity_plot(self, residual_metrics):
         fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot each token's journey
-        for pos, distances in residual_metrics["all_distances"].items():
+        for pos, similarities in residual_metrics["all_distances"].items():  # we should rename this dict key too
             token = residual_metrics["token_strings"][pos]
             if pos == residual_metrics["selected_token"]:
-                ax.plot(range(12), distances, "b-o", linewidth=2, label=token)
+                ax.plot(range(12), similarities, "b-o", linewidth=2, label=token)
             else:
-                ax.plot(range(12), distances, color="gray", alpha=0.3)
+                ax.plot(range(12), similarities, color="gray", alpha=0.3)
 
         ax.set_xlabel("Layer")
-        ax.set_ylabel(
-            f'Distance from Initial Embedding ({residual_metrics["distance_type"]})'
-        )
-        ax.set_title("Token Distances from Initial Embeddings Across Layers")
+        ax.set_ylabel(f'Similarity to Initial Embedding (Cosine)')
+        ax.set_title("Token Similarities to Initial Embeddings Across Layers")
         ax.grid(True)
         ax.legend()
 
@@ -137,13 +133,6 @@ class AttentionAnalyzerUI:
                     label="Input text",
                 )
 
-                distance_type = gr.Dropdown(
-                    choices=["Euclidean", "Cosine"],
-                    label="Distance type",
-                    show_label=True,
-                    value="Cosine",
-                    scale=0,
-                )
                 use_positional = gr.Checkbox(
                     label="Use positional embeddings",
                     show_label=True,
@@ -167,7 +156,7 @@ class AttentionAnalyzerUI:
                 )
 
             with gr.Tabs():
-                with gr.Tab("Distances and Rankings"):
+                with gr.Tab("Similarity and Rankings"):
                     with gr.Row():
                         residual_distance_dataframe = gr.DataFrame(
                             label="Distance between the post-attention layer residual output and the original vocabulary token embeddings",
@@ -176,7 +165,7 @@ class AttentionAnalyzerUI:
                             col_count=12,
                             headers=[f"layer {layer}" for layer in range(12)],
                         )
-                with gr.Tab("Distance across Layers"):
+                with gr.Tab("Similarity across Layers"):
                     residual_distance_plot = gr.Plot()
                 with gr.Tab("Rankings across Layers"):
                     residual_rank_plot = gr.Plot()
@@ -186,7 +175,6 @@ class AttentionAnalyzerUI:
                 "inputs": [
                     text,
                     tokens,
-                    distance_type,
                     use_positional,
                 ],
                 "outputs": [
@@ -199,7 +187,6 @@ class AttentionAnalyzerUI:
             tokens.click(
                 **update_handler_params,
             )
-            distance_type.change(**update_handler_params)
             use_positional.change(**update_handler_params)
             demo.load(**update_handler_params)
 

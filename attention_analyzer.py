@@ -31,7 +31,7 @@ class AttentionAnalyzer:
         f = self.transformer.config.hidden_size  # 768
         self.index = faiss.IndexFlatIP(
             f
-        )  # for cosine similarity, assuming normalized vectors
+        )  # inner product of normalized vectors = cosine similarity
         vocab_embeddings = (
             self.transformer.get_raw_vocab_embeddings(
                 selected_token_idx=0, apply_positional_embeddings=False
@@ -97,35 +97,33 @@ class AttentionAnalyzer:
 
     def get_closest_vocabulary_tokens(
         self,
-        distances,  # FAISS distances array (D)
+        similarities,  # FAISS inner product results (D) - now similarities not distances
         indices,  # FAISS indices array (I)
         selected_token_id,
         k=15,
         include_selected=True,
-    ):
+        ):
         # Find rank in full results first
         full_rank = (indices[0] == selected_token_id).nonzero()[0].item()
 
         # Then take top k for display
-        top_k_distances = distances[0][:k]
+        top_k_similarities = similarities[0][:k]
         top_k_indices = indices[0][:k]
 
         # Convert to token strings and format with ranks
         token_strings = self.transformer.tokenizer.convert_ids_to_tokens(top_k_indices)
         result_strings = [
-            ("▶" if idx == selected_token_id else "") + f"{i+1}. {token} ({dist:.3f})"
-            for i, (token, dist, idx) in enumerate(
-                zip(token_strings, top_k_distances, top_k_indices)
+            ("▶" if idx == selected_token_id else "") + f"{i+1}. {token} ({sim:.3f})"
+            for i, (token, sim, idx) in enumerate(
+                zip(token_strings, top_k_similarities, top_k_indices)
             )
         ]
 
         # If selected token not in top k and we want to include it
         if include_selected and selected_token_id not in top_k_indices:
-            token = self.transformer.tokenizer.convert_ids_to_tokens(
-                [selected_token_id]
-            )[0]
-            full_distance = distances[0][full_rank]  # Get distance from full results
-            result_strings.append(f"▶{full_rank+1}. {token} ({full_distance:.3f})")
+            token = self.transformer.tokenizer.convert_ids_to_tokens([selected_token_id])[0]
+            full_similarity = similarities[0][full_rank]
+            result_strings.append(f"▶{full_rank+1}. {token} ({full_similarity:.3f})")
 
         return result_strings
 
@@ -269,6 +267,7 @@ class AttentionAnalyzer:
                 context_output = concatenated_heads @ layer_context_weights
                 layer_input = outputs.hidden_states[layer_idx][0, pos]
                 layer_output = context_output + layer_input
+                layer_output = F.normalize(layer_output.unsqueeze(0), p=2, dim=-1).squeeze(0)
                 layer_output = layer_output.detach()
 
                 # Use FAISS to get distances and rankings

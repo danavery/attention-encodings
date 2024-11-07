@@ -12,7 +12,7 @@ Descriptions of transformer architecture often assume that later token encodings
 
 1. *Token Movement Through Layers:* Token encodings shift both toward and away from their original embeddings as they progress through the transformer layers. This movement is measured by the number of tokens closer to each encoding than its original embedding.
 2. *Context vs. Function Words:* By the final layer, context-dependent words—those that rely on surrounding words to define their meaning—deviate significantly from their original embeddings, conceptually drifting far from their initial representations. In contrast, function words, like "and" or "the," remain much closer to their original embeddings, indicating that the attention mechanism alters their rankings minimally.
-3. *Encoding Space Density:* Interestingly, the cosine distances between the original embeddings and the final layer embeddings show only slight variation between context and function words. This suggests that context words may occupy a denser region in the encoding space than function words, potentially accounting for their larger shifts in relative rankings.
+3. *Encoding Space Density:* Interestingly, the cosine similarity between the original embeddings and the final layer embeddings show only slight variation between context and function words. This suggests that context words may occupy a denser region in the encoding space than function words, potentially accounting for their larger shifts in relative rankings.
 4. *Radical Shift in Layer 5:* In this RoBERTa model, layer 5 exhibits a dramatic shift, pushing token encodings far from their original embeddings. However, by layer 6, they revert closer to their initial positions. Whether this is a particular quirk of the RoBERTa model or a general property of transformers is unclear. It's also unclear if the shift implies a particular recontextualization action or is simply a place where the model goes "off-track" temporarily. The layer 5 shift happens regardless of the token sequence processed.
 
 This behavior suggests that while the attention layers impact the rankings of "context" words more than function words, this may be attributed more to differences in encoding space density for the two types of tokens than to inherent differences in movement of tokens through the encoding space.
@@ -21,10 +21,10 @@ This behavior suggests that while the attention layers impact the rankings of "c
 
 1. Input some text to be tokenized. Hit return or click "Tokenize"
 2. Click on one of the displayed tokens
-3. In the "Distances and Rankings" tab:
-    * See the rankings of, and distances to, the token's encoding against the original token embeddings.
-4. In the "Distance across Layers" tab:
-    * See how the cosine distance changes between the token's encoding and the original token embeddings as the token moves through the layers
+3. In the "Similarity and Rankings" tab:
+    * See the rankings of, and similarity to, the token's encoding against the original token embeddings.
+4. In the "Similarity across Layers" tab:
+    * See how the cosine similarity changes between the token's encoding and the original token embeddings as the token moves through the layers
     <!-- * Toggle "Use positional embeddings" to see how the distance rankings change when the token's positional embedding is added to the vocabulary embeddings -->
 5. In the "Rankings across Layers" tab:
     * See how the rank of the token's encoding changes relative to the original token embeddings as the token moves through the layers
@@ -32,18 +32,18 @@ This behavior suggests that while the attention layers impact the rankings of "c
 
 ## Methodology
 
-To understand how token representations evolve through transformer layers, we analyze them in three complementary ways:
+To understand how token representations evolve through transformer layers, we analyze them in two complementary ways:
 
-1. Layer-by-Layer Distances
+1. Layer-by-Layer Similarity
     * For each layer, examine the complete output after:
         * Attention mechanism processes the token
         * Attention head outputs are concatenated
         * Residual connection adds the layer input
     * Compare this full layer output against the original vocabulary embeddings
     * Track how token representations maintain or lose their connection to their original meanings
-    * Measure distances to all tokens in the original vocabulary
+    * Measure similarity to all tokens in the original vocabulary
 
-2. Distance Plot
+2. Similarity Plot
     * Track how far each token's representation moves from its original embedding
     * Compare movement patterns between different types of tokens (e.g., content vs. function words)
     * Observe patterns in how representations evolve through the network
@@ -59,7 +59,7 @@ Implementation Details:
   * Compare this complete layer output against the original vocabulary embeddings
   * Optionally include positional embeddings in the comparison
 
-* Rankings and distances show how close the layer output remains to the token's original meaning
+* Rankings and similarities show how close the layer output remains to the token's original meaning
 * This analysis reveals both information preservation and transformation through the network
 
 This methodology provides a comprehensive view of how token representations evolve, showing both the gradual drift from original meanings and the emergence of context-dependent relationships between tokens.
@@ -73,9 +73,9 @@ This methodology provides a comprehensive view of how token representations evol
   * Required for fair comparison since layer outputs include position information
   * Can be disabled to see position-independent relationships
 
-* Distance calculations:
-  * Implemented with both cosine and Euclidean metrics
-  * Cosine distance produces more interpretable results
+* Similarity calculations:
+  * Originally implemented with both cosine and Euclidean metrics
+  * Cosine similarity produces more interpretable results
   * Applied between complete layer outputs and vocabulary embeddings
 
 Using RoBERTa-base from Hugging Face:
@@ -92,16 +92,16 @@ RoBERTa was chosen due to its encoder-based architecture. Additionally, avoiding
 
 The conventional descriptions of transformer architecture suggest that later token encodings have a direct and specific relationship to their original tokens, gradually transforming into more abstract or generalized concepts. This holds true for the most part in this analysis—but there are some intriguing exceptions.
 
-There are two ways to think of "distance" in this analysis:
+There are two ways to think of "similarity" in this analysis:
 
 1. Similarity Ranking: The number of vocabulary tokens that are closer to the token's current encoding at a particular layer than to the original token embedding.
-2. Distance: The measured cosine or Euclidean distance between the token's current encoding at a particular layer and the original token embedding.
+2. Similarity: The measured cosine similarity between the token's current encoding at a particular layer and the original token embedding.
 
 In the first case, "context" words, which have more inherent "meaning" and are more likely to be related to other words in the sequence, appear to deviate significantly from their original embeddings. There are more original vocabulary tokens between their current location and their original one. This implies that they are conceptually drifting far from their initial representations. In contrast, function words, like "and" or "the," remain much closer to their original embedding rankings, implying that the attention mechanism alters their meaning minimally.
 
-However, in the case of explicit distance from their original embeddings, the differences are much smaller. The context words still have a higher distance than the function words, but the difference is not as stark. This implies that the "context" words are in a denser region of the encoding space than the function words, so their relative meaning changes much faster per unit of distance--they're moving through and past many other vocabulary tokens
+However, in the case of explicit similarity to their original embeddings, the differences are much smaller. The context words still have a lower similarity than the function words, but the difference is not as stark. This implies that the "context" words are in a denser region of the encoding space than the function words, so their relative meaning changes much faster per unit of similarity--they're moving through and past many other vocabulary tokens
 
-Interestingly, there's a strange shift that happens in layer 5. The context words don't move much at all in the rankings against their original embeddings, but the function words make large jumps. Then, by layer 6, the function words revert back to their original rankings, while the context words stay roughly where they are. What's going on here? Is this just an artifact of this particular RoBERTa model, or does it say something deeper about how the attention mechanism works? Is there some sort of realignment happening in the encoding space that's causing this, and why does it only affect function words?
+Interestingly, there's a strange shift that happens in layer 5. The context words don't move much at all in the similarity rankings against their original embeddings, but the function words make large jumps. Then, by layer 6, the function words revert back to their original rankings, while the context words stay roughly where they are. What's going on here? Is this just an artifact of this particular RoBERTa model, or does it say something deeper about how the attention mechanism works? Is there some sort of realignment happening in the encoding space that's causing this, and why does it only affect function words?
 
 Also, layer 11, the final layer, is actually where the function and context words diverge the most their behavior. The context words take huge downwards jumps in the similarity rankings, and the function words stay roughly where they are. That layer appears to be doing more work at determining "meaning" than any of the previous layers, apart from the strange layer 5.
 
