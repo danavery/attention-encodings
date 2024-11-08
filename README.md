@@ -21,14 +21,14 @@ This behavior suggests that while the attention layers impact the rankings of "c
 
 1. Input some text to be tokenized. Hit return or click "Tokenize"
 2. Click on one of the displayed tokens
-3. In the "Similarity and Rankings" tab:
+3. Toggle "Use positional embeddings" to see how the distance rankings change when the token's positional embedding is added to the vocabulary embeddings
+4. In the "Similarity and Rankings" tab:
     * See the rankings of, and similarity to, the token's encoding against the original token embeddings.
-4. In the "Similarity across Layers" tab:
+5. In the "Similarity across Layers" tab:
     * See how the cosine similarity changes between the token's encoding and the original token embeddings as the token moves through the layers
-    <!-- * Toggle "Use positional embeddings" to see how the distance rankings change when the token's positional embedding is added to the vocabulary embeddings -->
-5. In the "Rankings across Layers" tab:
+6. In the "Rankings across Layers" tab:
     * See how the rank of the token's encoding changes relative to the original token embeddings as the token moves through the layers
-    <!-- * Toggle "Use positional embeddings" to see how the rank rankings change when the token's positional embedding is added to the vocabulary embeddings -->
+    * Toggle "Use positional embeddings" to see how the rank rankings change when the token's positional embedding is added to the vocabulary embeddings
 
 ## Methodology
 
