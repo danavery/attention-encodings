@@ -127,7 +127,7 @@ I believe these insights offer a fresh perspective on transformers and open up i
 ## Screenshots
 
 ![Sequence input UI](./images/sequence-input.png)
-![Rankings and Similarity Table](./images/rankings-and-similarity.png)
+![Rankings and Similarity Table](./images/rankings-and-similarity-v2.png)
 ![Similarity across Layers](./images/similarity-across-layers.png)
 ![Rankings across Layers](./images/rankings-across-layers.png)
 
