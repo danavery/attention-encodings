@@ -1,3 +1,4 @@
 .python-version
 __pycache__/
 all_python_files_new.txt
+.DS_Store

@@ -17,9 +17,10 @@ class AttentionAnalyzerUI:
         # read in README.md and strip out metadata if present
         with open("./README.md", "r") as file:
             intro_markdown = file.read()
-            position = intro_markdown.find("# Dense")
-            if position != -1:
-                intro_markdown = intro_markdown[position:]
+            start_position = intro_markdown.find("# Dense")
+            end_position = intro_markdown.find("## Screenshots")
+            if start_position != -1:
+                intro_markdown = intro_markdown[start_position:end_position ]
         return intro_markdown
 
     def update_tabs(
