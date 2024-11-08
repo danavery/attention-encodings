@@ -21,7 +21,7 @@ This behavior suggests that while the attention layers impact the rankings of co
 
 1. Input some text to be tokenized. Hit return or click "Tokenize"
 2. Click on one of the displayed tokens
-3. Toggle "Use positional embeddings" to see how the distance rankings change when the token's positional embedding is added to the vocabulary embeddings
+3. Toggle "Use positional embeddings" to see how the similarity rankings change when the token's positional embedding is added to the vocabulary embeddings
 4. In the "Similarity and Rankings" tab:
     * See the rankings of, and similarity to, the token's encoding against the original token embeddings.
 5. In the "Similarity across Layers" tab:

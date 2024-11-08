@@ -35,17 +35,17 @@ class AttentionAnalyzerUI:
         residual_metrics = self.analyzer.get_all_token_metrics(
             text, selected_token, use_positional
         )
-        token_string, residual_distance_dataframe = (
-            self.analyzer.get_residual_distances_df(residual_metrics, selected_token)
+        token_string, residual_similarity_dataframe = (
+            self.analyzer.get_residual_similarities_df(residual_metrics, selected_token)
         )
 
-        residual_distance_plot = self.create_residual_similarity_plot(residual_metrics)
+        residual_similarity_plot = self.create_residual_similarity_plot(residual_metrics)
         residual_rank_plot = self.create_residual_rank_plot(residual_metrics)
 
         return (
             token_string,
-            residual_distance_dataframe,
-            residual_distance_plot,
+            residual_similarity_dataframe,
+            residual_similarity_plot,
             residual_rank_plot,
         )
 
@@ -94,7 +94,7 @@ class AttentionAnalyzerUI:
         sim_fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot each token's journey
-        for pos, similarities in residual_metrics["all_distances"].items():  # we should rename this dict key too
+        for pos, similarities in residual_metrics["all_similarities"].items():  # we should rename this dict key too
             token = residual_metrics["token_strings"][pos]
             if pos == residual_metrics["selected_token"]:
                 ax.plot(range(12), similarities, "b-o", linewidth=2, label=token)
@@ -164,15 +164,15 @@ class AttentionAnalyzerUI:
             with gr.Tabs():
                 with gr.Tab("Similarity and Rankings"):
                     with gr.Row():
-                        residual_distance_dataframe = gr.DataFrame(
-                            label="Distance between the post-attention layer residual output and the original vocabulary token embeddings",
+                        residual_similarity_dataframe = gr.DataFrame(
+                            label="Similarities between the post-attention layer residual output and the original vocabulary token embeddings",
                             show_label=True,
                             elem_classes="combined",
                             col_count=12,
                             headers=[f"layer {layer}" for layer in range(12)],
                         )
                 with gr.Tab("Similarity across Layers"):
-                    residual_distance_plot = gr.Plot()
+                    residual_similarity_plot = gr.Plot()
                 with gr.Tab("Rankings across Layers"):
                     residual_rank_plot = gr.Plot()
 
@@ -185,8 +185,8 @@ class AttentionAnalyzerUI:
                 ],
                 "outputs": [
                     selected_token_str,
-                    residual_distance_dataframe,
-                    residual_distance_plot,
+                    residual_similarity_dataframe,
+                    residual_similarity_plot,
                     residual_rank_plot,
                 ],
             }
