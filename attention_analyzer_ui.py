@@ -1,7 +1,5 @@
 import gradio as gr
 import matplotlib.pyplot as plt
-import numpy as np
-from sklearn.decomposition import PCA
 
 from attention_analyzer import AttentionAnalyzer
 

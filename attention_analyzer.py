@@ -1,10 +1,8 @@
-import logging
 import time
 from functools import wraps
 
 import faiss
 import pandas as pd
-import torch
 import torch.nn.functional as F
 
 
@@ -55,7 +53,6 @@ class AttentionAnalyzer:
         )
         index.add(vocab_embeddings)
         self.indexes["positional"] = index
-
 
     def get_tokens_for_text(self, text):
         inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
@@ -118,7 +115,7 @@ class AttentionAnalyzer:
         selected_token_id,
         k=15,
         include_selected=True,
-        ):
+    ):
         # Find rank in full results first
         full_rank = (indices[0] == selected_token_id).nonzero()[0].item()
 
@@ -137,7 +134,9 @@ class AttentionAnalyzer:
 
         # If selected token not in top k and we want to include it
         if include_selected and selected_token_id not in top_k_indices:
-            token = self.transformer.tokenizer.convert_ids_to_tokens([selected_token_id])[0]
+            token = self.transformer.tokenizer.convert_ids_to_tokens(
+                [selected_token_id]
+            )[0]
             full_similarity = similarities[0][full_rank]
             result_strings.append(f"▶{full_rank+1}. {token} ({full_similarity:.3f})")
 
@@ -148,9 +147,7 @@ class AttentionAnalyzer:
             selected_token = 1
 
         token_str = residual_metrics["token_strings"][selected_token]
-        token_id = residual_metrics["token_ids"][
-            selected_token
-        ]
+        token_id = residual_metrics["token_ids"][selected_token]
 
         # Format similarities for each layer
         similarities = {}
@@ -222,7 +219,9 @@ class AttentionAnalyzer:
                 context_output = concatenated_heads @ layer_context_weights
                 layer_input = outputs.hidden_states[layer_idx][0, pos]
                 layer_output = context_output + layer_input
-                layer_output = F.normalize(layer_output.unsqueeze(0), p=2, dim=-1).squeeze(0)
+                layer_output = F.normalize(
+                    layer_output.unsqueeze(0), p=2, dim=-1
+                ).squeeze(0)
                 layer_output = layer_output.detach()
 
                 # Use FAISS to get similarities and rankings
@@ -232,11 +231,11 @@ class AttentionAnalyzer:
                 faiss_results.append((D, I))  # Store raw results
 
                 # Store similarity and ranking for this token at this layer
-                similarity = D[0][0]  # Similarity to nearest neighbor
+
                 rank = (
                     (I[0] == tok_id).nonzero()[0].item()
                 )  # Position of original token in results
-
+                similarity = D[0][rank]  # Similarity to original encoding
                 token_similarities.append(similarity)
                 token_rankings.append(rank)
 

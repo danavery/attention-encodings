@@ -27,9 +27,6 @@ class TransformerManager:
         self.vocab_base_embeddings = self.model.embeddings.word_embeddings.weight.data
         self.positional_embeddings = self.model.embeddings.position_embeddings.weight
         self.layer_norm = self.model.embeddings.LayerNorm
-        self.normalized_vocab_embeddings = self.layer_norm(self.vocab_base_embeddings)
-        self.position_adjusted_vocab = None
-        self.normalized_position_adjusted_vocab = None
 
     def get_layer_context_weights(self, layer):
         return self.model.encoder.layer[layer].attention.output.dense.weight
@@ -40,12 +37,6 @@ class TransformerManager:
             return F.normalize(self.position_adjusted_vocab, p=2, dim=-1)
         else:
             return F.normalize(self.vocab_base_embeddings, p=2, dim=-1)
-
-    def get_normalized_vocab_embeddings(self, apply_positional_embeddings=True):
-        if apply_positional_embeddings:
-            return self.normalized_position_adjusted_vocab
-        else:
-            return self.normalized_vocab_embeddings
 
     def adjust_vocab_to_token_position(self, selected_token_idx):
         self.position_adjusted_vocab = (
