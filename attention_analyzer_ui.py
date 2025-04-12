@@ -33,37 +33,37 @@ class AttentionAnalyzerUI:
         if not selected_token:
             selected_token = 1
         selected_token = int(selected_token)
-        residual_metrics = self.analyzer.get_all_token_metrics(text, use_positional)
-        token_string, residual_similarity_dataframe = (
-            self.analyzer.get_residual_similarities_df(residual_metrics, selected_token)
+        token_metrics = self.analyzer.get_all_token_metrics(text, use_positional)
+        token_string, similarity_dataframe = (
+            self.analyzer.get_similarities_df(token_metrics, selected_token)
         )
 
-        residual_similarity_plot = self.create_residual_similarity_plot(
-            residual_metrics, selected_token
+        similarity_plot = self.create_similarity_plot(
+            token_metrics, selected_token
         )
-        residual_rank_plot = self.create_residual_rank_plot(
-            residual_metrics, selected_token
+        rank_plot = self.create_rank_plot(
+            token_metrics, selected_token
         )
 
         return (
             token_string,
-            residual_similarity_dataframe,
-            residual_similarity_plot,
-            residual_rank_plot,
+            similarity_dataframe,
+            similarity_plot,
+            rank_plot,
         )
 
-    def create_residual_rank_plot(self, residual_metrics, selected_token):
+    def create_rank_plot(self, token_metrics, selected_token):
         if hasattr(self, "rank_fig"):
             plt.close(self.rank_fig)
         rank_fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot each token's ranking journey
-        for pos in range(len(residual_metrics["faiss_results"])):
+        for pos in range(len(token_metrics["faiss_results"])):
             print(f"hello {pos}")
             rankings = AttentionAnalyzer.get_rankings_for_token(
-                pos, residual_metrics["faiss_results"], residual_metrics["token_ids"]
+                pos, token_metrics["faiss_results"], token_metrics["token_ids"]
             )
-            token = residual_metrics["token_strings"][pos]
+            token = token_metrics["token_strings"][pos]
             if pos == selected_token:
                 # Selected token - bold blue line with markers
                 ax.plot(range(12), rankings, "b-o", linewidth=2, label=token)
@@ -72,11 +72,11 @@ class AttentionAnalyzerUI:
                 ax.plot(range(12), rankings, color="gray", alpha=0.3)
 
         # Add token labels at the end of each line
-        for pos in range(len(residual_metrics["faiss_results"])):
+        for pos in range(len(token_metrics["faiss_results"])):
             rankings = AttentionAnalyzer.get_rankings_for_token(
-                pos, residual_metrics["faiss_results"], residual_metrics["token_ids"]
+                pos, token_metrics["faiss_results"], token_metrics["token_ids"]
             )
-            token = residual_metrics["token_strings"][pos]
+            token = token_metrics["token_strings"][pos]
             # Add text slightly offset from the final point
             ax.annotate(
                 token,
@@ -98,18 +98,17 @@ class AttentionAnalyzerUI:
 
         return rank_fig
 
-    def create_residual_similarity_plot(self, residual_metrics, selected_token):
+    def create_similarity_plot(self, token_metrics, selected_token):
         if hasattr(self, "sim_fig"):
             plt.close(self.sim_fig)
         sim_fig, ax = plt.subplots(figsize=(10, 6))
 
-        # Plot each token's journey
-        # for pos, similarities in residual_metrics["self_similarity_by_token"].items():
-        for pos in range(len(residual_metrics["faiss_results"])):
+        # Plot each token's journey by layer
+        for pos in range(len(token_metrics["faiss_results"])):
             similarities = AttentionAnalyzer.get_similarities_for_token(
-                pos, residual_metrics["faiss_results"], residual_metrics["token_ids"]
+                pos, token_metrics["faiss_results"], token_metrics["token_ids"]
             )
-            token = residual_metrics["token_strings"][pos]
+            token = token_metrics["token_strings"][pos]
             if pos == selected_token:
                 ax.plot(range(12), similarities, "b-o", linewidth=2, label=token)
             else:
@@ -178,17 +177,17 @@ class AttentionAnalyzerUI:
             with gr.Tabs():
                 with gr.Tab("Similarity and Rankings"):
                     with gr.Row():
-                        residual_similarity_dataframe = gr.DataFrame(
-                            label="Similarities between the post-attention layer residual output and the original vocabulary token embeddings",
+                        similarity_dataframe = gr.DataFrame(
+                            label="Similarities between the post-attention layer post-residual-add output and the original vocabulary token embeddings",
                             show_label=True,
                             elem_classes="combined",
                             col_count=12,
                             headers=[f"layer {layer}" for layer in range(12)],
                         )
                 with gr.Tab("Similarity across Layers"):
-                    residual_similarity_plot = gr.Plot()
+                    similarity_plot = gr.Plot()
                 with gr.Tab("Rankings across Layers"):
-                    residual_rank_plot = gr.Plot()
+                    rank_plot = gr.Plot()
 
             update_handler_params = {
                 "fn": self.update_tabs,
@@ -199,9 +198,9 @@ class AttentionAnalyzerUI:
                 ],
                 "outputs": [
                     selected_token_str,
-                    residual_similarity_dataframe,
-                    residual_similarity_plot,
-                    residual_rank_plot,
+                    similarity_dataframe,
+                    similarity_plot,
+                    rank_plot,
                 ],
             }
             tokens.click(

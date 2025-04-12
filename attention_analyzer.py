@@ -142,17 +142,17 @@ class AttentionAnalyzer:
 
         return result_strings
 
-    def get_residual_similarities_df(self, residual_metrics, selected_token):
+    def get_similarities_df(self, token_metrics, selected_token):
         if selected_token is None:
             selected_token = 1
 
-        token_str = residual_metrics["token_strings"][selected_token]
-        token_id = residual_metrics["token_ids"][selected_token]
+        token_str = token_metrics["token_strings"][selected_token]
+        token_id = token_metrics["token_ids"][selected_token]
 
         # Format similarities for each layer
         similarities = {}
         for layer in range(self.transformer.config.num_hidden_layers):
-            D, I = residual_metrics["faiss_results"][selected_token][layer]
+            D, I = token_metrics["faiss_results"][selected_token][layer]
             similarities[f"layer {layer}"] = self.get_closest_vocabulary_tokens(
                 D, I, token_id, k=self.k
             )
@@ -163,15 +163,15 @@ class AttentionAnalyzer:
             current_length = len(similarities[layer])
             if current_length < max_length:
                 similarities[layer].extend([""] * (max_length - current_length))
-        residual_sim_df = pd.DataFrame(
+        similarity_df = pd.DataFrame(
             similarities,
             columns=[
                 f"layer {layer}"
                 for layer in range(self.transformer.config.num_hidden_layers)
             ],
         )
-        print(token_str, residual_sim_df.shape, residual_sim_df)
-        return token_str, residual_sim_df
+        print(token_str, similarity_df.shape, similarity_df)
+        return token_str, similarity_df
 
     def get_all_token_metrics(self, text, use_positional=False):
         """
