@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 class App:
     def __init__(self):
-        transformer = TransformerManager()
+        transformer = TransformerManager(model_name="roberta-base")
         analyzer = AttentionAnalyzer(transformer)
         self.ui = AttentionAnalyzerUI(analyzer)
 

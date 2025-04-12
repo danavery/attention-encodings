@@ -22,6 +22,7 @@ def log_name_and_time(func):
 class AttentionAnalyzer:
     def __init__(self, transformer, k=15):
         self.transformer = transformer
+        self.num_layers = self.transformer.config.num_hidden_layers
         self.k = k
         self._setup_indexes()
 

@@ -8,6 +8,7 @@ class AttentionAnalyzerUI:
     def __init__(self, analyzer: AttentionAnalyzer):
         self.analyzer = analyzer
         self.k = analyzer.k
+        self.num_layers = analyzer.num_layers
         self.sim_fig = None
         self.rank_fig = None
 
@@ -63,24 +64,19 @@ class AttentionAnalyzerUI:
             rankings = AttentionAnalyzer.get_rankings_for_token(
                 pos, token_metrics["faiss_results"], token_metrics["token_ids"]
             )
-            token = token_metrics["token_strings"][pos]
+            token_string = token_metrics["token_strings"][pos]
+
             if pos == selected_token:
                 # Selected token - bold blue line with markers
-                ax.plot(range(12), rankings, "b-o", linewidth=2, label=token)
+                ax.plot(range(self.num_layers), rankings, "b-o", linewidth=2, label=token_string)
             else:
                 # Other tokens - thin gray lines
-                ax.plot(range(12), rankings, color="gray", alpha=0.3)
+                ax.plot(range(self.num_layers), rankings, color="gray", alpha=0.3)
 
-        # Add token labels at the end of each line
-        for pos in range(len(token_metrics["faiss_results"])):
-            rankings = AttentionAnalyzer.get_rankings_for_token(
-                pos, token_metrics["faiss_results"], token_metrics["token_ids"]
-            )
-            token = token_metrics["token_strings"][pos]
-            # Add text slightly offset from the final point
+            # Add token labels at the end of each line
             ax.annotate(
-                token,
-                (11, rankings[-1]),
+                token_string,
+                (self.num_layers - 1, rankings[-1]),
                 xytext=(5, 0),
                 textcoords="offset points",
                 fontsize=8,
@@ -108,11 +104,21 @@ class AttentionAnalyzerUI:
             similarities = AttentionAnalyzer.get_similarities_for_token(
                 pos, token_metrics["faiss_results"], token_metrics["token_ids"]
             )
-            token = token_metrics["token_strings"][pos]
+            token_string = token_metrics["token_strings"][pos]
             if pos == selected_token:
-                ax.plot(range(12), similarities, "b-o", linewidth=2, label=token)
+                ax.plot(range(self.num_layers), similarities, "b-o", linewidth=2, label=token_string)
             else:
-                ax.plot(range(12), similarities, color="gray", alpha=0.3)
+                ax.plot(range(self.num_layers), similarities, color="gray", alpha=0.3)
+
+            # Add token labels at the end of each line
+            ax.annotate(
+                token_string,
+                (self.num_layers - 1, similarities[-1]),
+                xytext=(5, 0),
+                textcoords="offset points",
+                fontsize=8,
+                alpha=1.0 if pos == selected_token else 0.3,
+            )
 
         ax.set_xlabel("Layer")
         ax.set_ylabel("Similarity to Initial Embedding (Cosine)")
@@ -181,8 +187,8 @@ class AttentionAnalyzerUI:
                             label="Similarities between the post-attention layer post-residual-add output and the original vocabulary token embeddings",
                             show_label=True,
                             elem_classes="combined",
-                            col_count=12,
-                            headers=[f"layer {layer}" for layer in range(12)],
+                            col_count=self.num_layers,
+                            headers=[f"layer {layer}" for layer in range(self.num_layers)],
                         )
                 with gr.Tab("Similarity across Layers"):
                     similarity_plot = gr.Plot()
