@@ -60,7 +60,6 @@ class AttentionAnalyzerUI:
 
         # Plot each token's ranking journey
         for pos in range(len(token_metrics["faiss_results"])):
-            print(f"hello {pos}")
             rankings = AttentionAnalyzer.get_rankings_for_token(
                 pos, token_metrics["faiss_results"], token_metrics["token_ids"]
             )

@@ -171,7 +171,6 @@ class AttentionAnalyzer:
                 for layer in range(self.transformer.config.num_hidden_layers)
             ],
         )
-        print(token_str, similarity_df.shape, similarity_df)
         return token_str, similarity_df
 
     def get_all_token_metrics(self, text, use_positional=False):
@@ -262,9 +261,6 @@ class AttentionAnalyzer:
         For a given token position, compute a list of ranks across all layers.
         Each rank is the index at which the original token ID appears in the FAISS result.
         """
-        print(pos)
-        print(type(token_ids))
-        print(token_ids.shape)
         tok_id = token_ids[pos].item()
         rankings = []
         for _, indexes in faiss_results[pos]:
