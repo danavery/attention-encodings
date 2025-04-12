@@ -38,7 +38,7 @@ class AttentionAnalyzer:
             .detach()
             .numpy()
         )
-        index.add(vocab_embeddings)
+        index.add(vocab_embeddings)  # type: ignore
         self.indexes["raw"] = index
 
         index = faiss.IndexFlatIP(
@@ -51,7 +51,7 @@ class AttentionAnalyzer:
             .detach()
             .numpy()
         )
-        index.add(vocab_embeddings)
+        index.add(vocab_embeddings)  # type: ignore
         self.indexes["positional"] = index
 
     def get_tokens_for_text(self, text):
@@ -110,7 +110,7 @@ class AttentionAnalyzer:
 
     def get_closest_vocabulary_tokens(
         self,
-        similarities,  # FAISS inner product results (D) - now similarities not distances
+        similarities,  # FAISS inner product results (D)
         indices,  # FAISS indices array (I)
         selected_token_id,
         k=15,
@@ -163,19 +163,43 @@ class AttentionAnalyzer:
             current_length = len(similarities[layer])
             if current_length < max_length:
                 similarities[layer].extend([""] * (max_length - current_length))
-
-        return token_str, pd.DataFrame(
+        residual_sim_df = pd.DataFrame(
             similarities,
             columns=[
                 f"layer {layer}"
                 for layer in range(self.transformer.config.num_hidden_layers)
             ],
         )
+        print(token_str, residual_sim_df.shape, residual_sim_df)
+        return token_str, residual_sim_df
 
-    def get_all_token_metrics(self, text, selected_token, use_positional=False):
+    def get_all_token_metrics(self, text, use_positional=False):
+        """
+        Returns:
+        token_strings:
+            A list of string representations of the input tokens.
+            For example, token_strings[3] is the string corresponding to the fourth token.
+
+        token_ids:
+            A tensor of token ids indexed by token position in the sequence.
+            This tensor was used as the input to the model.
+            For example, token_ids[3] is the integer ID of the fourth token.
+
+        faiss_results:
+            A list of FAISS search results for each token in the input sequence.
+            For each token position `token_seq`, `faiss_results[token_seq]` is a list
+            of length `num_layers`, where each element is a tuple:
+
+            faiss_results[token_seq][layer_idx] == (similarities, indices)
+
+            where:
+            - `similarities` is a NumPy array of shape (1, vocab_size) containing
+            the cosine similarities between the normalized post-residual-add encoding
+            and all vocabulary token embeddings.
+            - `indices` is a NumPy array of shape (1, vocab_size) with corresponding token IDs in
+            similarity order.
+        """
         # Setup
-        if selected_token is None:
-            selected_token = 1  # Default to first real token (after <s>)
         inputs = self.transformer.tokenizer(text, return_tensors="pt", truncation=True)
         input_ids = inputs["input_ids"].squeeze(0)
         outputs = self.transformer.model(**inputs)
@@ -183,10 +207,8 @@ class AttentionAnalyzer:
         index = self.indexes["raw" if not use_positional else "positional"]
 
         # Track metrics for all tokens
-        similarities_by_token = {}
-        rankings_by_token = {}
-        token_strings = {}
-        faiss_results_by_token = {}
+        token_strings = []
+        faiss_results = []
         layer_post_attention_values = {}
 
         # Calculate metrics for each token position
@@ -196,12 +218,9 @@ class AttentionAnalyzer:
             tok_str = self.transformer.tokenizer.convert_ids_to_tokens(
                 tok_id.unsqueeze(0)
             )[0]
-            token_strings[pos] = tok_str
+            token_strings.append(tok_str)
 
-            # Initialize lists for this token's metrics
-            token_similarities = []
-            token_rankings = []
-            faiss_results = []
+            token_faiss_results = []
 
             # Calculate metrics at each layer
             for layer_idx in range(num_layers):
@@ -225,29 +244,46 @@ class AttentionAnalyzer:
                 layer_output = layer_output.detach()
 
                 # Use FAISS to get similarities and rankings
-                D, I = index.search(
+                similarities, indexes = index.search(
                     layer_output.unsqueeze(0), self.transformer.config.vocab_size
                 )
-                faiss_results.append((D, I))  # Store raw results
-
-                # Store similarity and ranking for this token at this layer
-
-                rank = (
-                    (I[0] == tok_id).nonzero()[0].item()
-                )  # Position of original token in results
-                similarity = D[0][rank]  # Similarity to original encoding
-                token_similarities.append(similarity)
-                token_rankings.append(rank)
-
-            similarities_by_token[pos] = token_similarities
-            rankings_by_token[pos] = token_rankings
-            faiss_results_by_token[pos] = faiss_results
-
+                token_faiss_results.append((similarities, indexes))  # Store raw results
+            faiss_results.append(token_faiss_results)
         return {
-            "all_similarities": similarities_by_token,
-            "all_rankings": rankings_by_token,
             "token_strings": token_strings,
             "token_ids": input_ids,
-            "faiss_results": faiss_results_by_token,
-            "selected_token": selected_token,
+            "faiss_results": faiss_results,
         }
+
+    @staticmethod
+    def get_rankings_for_token(pos, faiss_results, token_ids):
+        """
+        For a given token position, compute a list of ranks across all layers.
+        Each rank is the index at which the original token ID appears in the FAISS result.
+        """
+        print(pos)
+        print(type(token_ids))
+        print(token_ids.shape)
+        tok_id = token_ids[pos].item()
+        rankings = []
+        for _, indexes in faiss_results[pos]:
+            rank = (indexes[0] == tok_id).nonzero()[0].item()
+            rankings.append(rank)
+        return rankings
+
+    @staticmethod
+    def get_similarities_for_token(pos, faiss_results, token_ids):
+        """
+        For a given token position, compute a list of cosine similarities to the
+        original token embedding across all layers.
+
+        Each similarity is taken from the FAISS result for that token and layer.
+        """
+
+        tok_id = token_ids[pos].item()
+        similarities = []
+        for D, I in faiss_results[pos]:
+            rank = (I[0] == tok_id).nonzero()[0].item()
+            similarity = D[0][rank]
+            similarities.append(similarity)
+        return similarities

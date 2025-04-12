@@ -18,7 +18,7 @@ class AttentionAnalyzerUI:
             start_position = intro_markdown.find("# Dense")
             end_position = intro_markdown.find("## Screenshots")
             if start_position != -1:
-                intro_markdown = intro_markdown[start_position:end_position ]
+                intro_markdown = intro_markdown[start_position:end_position]
         return intro_markdown
 
     def update_tabs(
@@ -30,15 +30,20 @@ class AttentionAnalyzerUI:
         """
         Update the tabs with the new data.
         """
-        residual_metrics = self.analyzer.get_all_token_metrics(
-            text, selected_token, use_positional
-        )
+        if not selected_token:
+            selected_token = 1
+        selected_token = int(selected_token)
+        residual_metrics = self.analyzer.get_all_token_metrics(text, use_positional)
         token_string, residual_similarity_dataframe = (
             self.analyzer.get_residual_similarities_df(residual_metrics, selected_token)
         )
 
-        residual_similarity_plot = self.create_residual_similarity_plot(residual_metrics)
-        residual_rank_plot = self.create_residual_rank_plot(residual_metrics)
+        residual_similarity_plot = self.create_residual_similarity_plot(
+            residual_metrics, selected_token
+        )
+        residual_rank_plot = self.create_residual_rank_plot(
+            residual_metrics, selected_token
+        )
 
         return (
             token_string,
@@ -47,15 +52,19 @@ class AttentionAnalyzerUI:
             residual_rank_plot,
         )
 
-    def create_residual_rank_plot(self, residual_metrics):
+    def create_residual_rank_plot(self, residual_metrics, selected_token):
         if hasattr(self, "rank_fig"):
             plt.close(self.rank_fig)
         rank_fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot each token's ranking journey
-        for pos, rankings in residual_metrics["all_rankings"].items():
+        for pos in range(len(residual_metrics["faiss_results"])):
+            print(f"hello {pos}")
+            rankings = AttentionAnalyzer.get_rankings_for_token(
+                pos, residual_metrics["faiss_results"], residual_metrics["token_ids"]
+            )
             token = residual_metrics["token_strings"][pos]
-            if pos == residual_metrics["selected_token"]:
+            if pos == selected_token:
                 # Selected token - bold blue line with markers
                 ax.plot(range(12), rankings, "b-o", linewidth=2, label=token)
             else:
@@ -63,7 +72,10 @@ class AttentionAnalyzerUI:
                 ax.plot(range(12), rankings, color="gray", alpha=0.3)
 
         # Add token labels at the end of each line
-        for pos, rankings in residual_metrics["all_rankings"].items():
+        for pos in range(len(residual_metrics["faiss_results"])):
+            rankings = AttentionAnalyzer.get_rankings_for_token(
+                pos, residual_metrics["faiss_results"], residual_metrics["token_ids"]
+            )
             token = residual_metrics["token_strings"][pos]
             # Add text slightly offset from the final point
             ax.annotate(
@@ -72,7 +84,7 @@ class AttentionAnalyzerUI:
                 xytext=(5, 0),
                 textcoords="offset points",
                 fontsize=8,
-                alpha=1.0 if pos == residual_metrics["selected_token"] else 0.3,
+                alpha=1.0 if pos == selected_token else 0.3,
             )
 
         # Flip y-axis since lower rank = better
@@ -86,21 +98,25 @@ class AttentionAnalyzerUI:
 
         return rank_fig
 
-    def create_residual_similarity_plot(self, residual_metrics):
+    def create_residual_similarity_plot(self, residual_metrics, selected_token):
         if hasattr(self, "sim_fig"):
             plt.close(self.sim_fig)
         sim_fig, ax = plt.subplots(figsize=(10, 6))
 
         # Plot each token's journey
-        for pos, similarities in residual_metrics["all_similarities"].items():  # we should rename this dict key too
+        # for pos, similarities in residual_metrics["self_similarity_by_token"].items():
+        for pos in range(len(residual_metrics["faiss_results"])):
+            similarities = AttentionAnalyzer.get_similarities_for_token(
+                pos, residual_metrics["faiss_results"], residual_metrics["token_ids"]
+            )
             token = residual_metrics["token_strings"][pos]
-            if pos == residual_metrics["selected_token"]:
+            if pos == selected_token:
                 ax.plot(range(12), similarities, "b-o", linewidth=2, label=token)
             else:
                 ax.plot(range(12), similarities, color="gray", alpha=0.3)
 
         ax.set_xlabel("Layer")
-        ax.set_ylabel(f'Similarity to Initial Embedding (Cosine)')
+        ax.set_ylabel("Similarity to Initial Embedding (Cosine)")
         ax.set_title("Token Similarities to Initial Embeddings Across Layers")
         ax.grid(True)
         ax.legend()
