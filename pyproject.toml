@@ -1,0 +1,27 @@
+[project]
+name = "attention-encodings"
+version = "0.1.0"
+description = "attention encodings analyzer"
+dependencies = [
+  "numpy",
+  "scikit-learn",
+  "librosa",
+  "faiss-cpu",
+  "torch",
+  "transformers",
+  "gradio",
+]
+
+[project.optional-dependencies]
+dev = ["ruff==0.11.6"]
+viz = ["matplotlib"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 100
+extend-select = ["I"]
+
+# for GPU: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118

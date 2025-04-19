@@ -2,4 +2,6 @@
 __pycache__/
 all_python_files_new.txt
 .DS_Store
-.envrc
+.envrc.venv/
+build/
+*egg-info/
