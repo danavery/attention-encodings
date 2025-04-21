@@ -1,9 +1,10 @@
 import time
 from functools import wraps
 
-import faiss
 import pandas as pd
 import torch.nn.functional as F
+
+from numpy_index_flat_ip import NumpyIndexFlatIP
 
 
 def log_name_and_time(func):
@@ -29,9 +30,7 @@ class AttentionAnalyzer:
     def _setup_indexes(self, f=768):
         self.indexes = {}
         f = self.transformer.config.hidden_size  # 768
-        index = faiss.IndexFlatIP(
-            f
-        )  # inner product of normalized vectors = cosine similarity
+        index = NumpyIndexFlatIP(f)  # inner product of normalized vectors = cosine similarity
         vocab_embeddings = (
             self.transformer.get_raw_vocab_embeddings(
                 selected_token_idx=0, apply_positional_embeddings=False
@@ -42,9 +41,7 @@ class AttentionAnalyzer:
         index.add(vocab_embeddings)  # type: ignore
         self.indexes["raw"] = index
 
-        index = faiss.IndexFlatIP(
-            f
-        )  # inner product of normalized vectors = cosine similarity
+        index = NumpyIndexFlatIP(f)  # inner product of normalized vectors = cosine similarity
         vocab_embeddings = (
             self.transformer.get_raw_vocab_embeddings(
                 selected_token_idx=0, apply_positional_embeddings=True
@@ -69,9 +66,7 @@ class AttentionAnalyzer:
         """
         selected_layer = int(selected_layer)
         # get weights for selected_layer
-        selected_layer_value_weights = self.transformer.get_layer_value_weights(
-            selected_layer
-        )
+        selected_layer_value_weights = self.transformer.get_layer_value_weights(selected_layer)
 
         # actual input embeddings (not all-same-position-encoded)
         # <seq_len, hidden_size>, the input for selected_layer
@@ -100,9 +95,7 @@ class AttentionAnalyzer:
         encodings_per_head_permuted = encodings_per_head.permute(1, 0, 2)
 
         # multiply attention weights by encodings
-        post_attn_layer_encodings = layer_attention_weights.bmm(
-            encodings_per_head_permuted
-        )
+        post_attn_layer_encodings = layer_attention_weights.bmm(encodings_per_head_permuted)
 
         # end up with <seq_len, num_heads, hidden_size/num_heads>
         post_attn_layer_encodings = post_attn_layer_encodings.permute(1, 0, 2)
@@ -127,7 +120,7 @@ class AttentionAnalyzer:
         # Convert to token strings and format with ranks
         token_strings = self.transformer.tokenizer.convert_ids_to_tokens(top_k_indices)
         result_strings = [
-            ("▶" if idx == selected_token_id else "") + f"{i+1}. {token} ({sim:.3f})"
+            ("▶" if idx == selected_token_id else "") + f"{i + 1}. {token} ({sim:.3f})"
             for i, (token, sim, idx) in enumerate(
                 zip(token_strings, top_k_similarities, top_k_indices)
             )
@@ -135,11 +128,9 @@ class AttentionAnalyzer:
 
         # If selected token not in top k and we want to include it
         if include_selected and selected_token_id not in top_k_indices:
-            token = self.transformer.tokenizer.convert_ids_to_tokens(
-                [selected_token_id]
-            )[0]
+            token = self.transformer.tokenizer.convert_ids_to_tokens([selected_token_id])[0]
             full_similarity = similarities[0][full_rank]
-            result_strings.append(f"▶{full_rank+1}. {token} ({full_similarity:.3f})")
+            result_strings.append(f"▶{full_rank + 1}. {token} ({full_similarity:.3f})")
 
         return result_strings
 
@@ -167,8 +158,7 @@ class AttentionAnalyzer:
         similarity_df = pd.DataFrame(
             similarities,
             columns=[
-                f"layer {layer}"
-                for layer in range(self.transformer.config.num_hidden_layers)
+                f"layer {layer}" for layer in range(self.transformer.config.num_hidden_layers)
             ],
         )
         return token_str, similarity_df
@@ -215,9 +205,7 @@ class AttentionAnalyzer:
         for pos in range(len(input_ids)):
             # Get token info
             tok_id = input_ids[pos]
-            tok_str = self.transformer.tokenizer.convert_ids_to_tokens(
-                tok_id.unsqueeze(0)
-            )[0]
+            tok_str = self.transformer.tokenizer.convert_ids_to_tokens(tok_id.unsqueeze(0))[0]
             token_strings.append(tok_str)
 
             token_faiss_results = []
@@ -226,21 +214,17 @@ class AttentionAnalyzer:
             for layer_idx in range(num_layers):
                 # Get layer output for this token
                 if layer_idx not in layer_post_attention_values:
-                    layer_post_attention_values[layer_idx] = (
-                        self.compute_post_attention_values(layer_idx, outputs)
+                    layer_post_attention_values[layer_idx] = self.compute_post_attention_values(
+                        layer_idx, outputs
                     )
                 post_attention = layer_post_attention_values[layer_idx]
 
                 concatenated_heads = post_attention[pos].reshape(-1)
-                layer_context_weights = self.transformer.get_layer_context_weights(
-                    layer_idx
-                )
+                layer_context_weights = self.transformer.get_layer_context_weights(layer_idx)
                 context_output = concatenated_heads @ layer_context_weights
                 layer_input = outputs.hidden_states[layer_idx][0, pos]
                 layer_output = context_output + layer_input
-                layer_output = F.normalize(
-                    layer_output.unsqueeze(0), p=2, dim=-1
-                ).squeeze(0)
+                layer_output = F.normalize(layer_output.unsqueeze(0), p=2, dim=-1).squeeze(0)
                 layer_output = layer_output.detach()
 
                 # Use FAISS to get similarities and rankings
