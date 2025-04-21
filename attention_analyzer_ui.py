@@ -137,17 +137,10 @@ class AttentionAnalyzerUI:
         custom_css = """
                     .combined span { font-size: 9px !important; padding: 2px }
                     .combined div { min-height: 10px !important}
+                    .combined .cell-wrap { padding: 0 !important }
         """
-        # This is a hack to make Safari render the dataframe on load
-        head = """
-        <script>
-        setTimeout(() => {
-            window.scrollTo(0, 10);
-            window.scrollTo(0, 0);
-        }, 4000);
-        </script>"""
 
-        with gr.Blocks(css=custom_css, head=head) as demo:
+        with gr.Blocks(css=custom_css) as demo:
             initial_text = "Time flies like an arrow. Fruit flies like a banana."
             with gr.Row():
                 text = gr.Textbox(
