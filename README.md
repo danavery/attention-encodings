@@ -4,6 +4,8 @@ Current demo available [here](https://demo.danavery.com/attention-encodings).
 
 ## Introduction
 
+**[2025-04-22: I wrote a short post based on this demo on how three different metrics tell three very different stories about token movement in RoBERTa. Check it out [here](https://stuff.danavery.com/posts/2025-04-22-more-attention/).]**
+
 This experiment provides an exploratory look into the transformation of individual sequence tokens across the attention layers of a pre-trained RoBERTa model. The focus is on understanding the immediate post-attention output for specific sequence positions and identifying the "nearest" vocabulary tokens in the value encoding space.
 
 Descriptions of transformer architecture often assume that later token encodings have a direct and specific relationship to each originating token, gradually transforming into more abstract or generalized concepts. This holds true for the most part in this analysis—but there are some intriguing exceptions.
