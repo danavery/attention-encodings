@@ -144,9 +144,9 @@ class AttentionAnalyzer:
         # Format similarities for each layer
         similarities = {}
         for layer in range(self.transformer.config.num_hidden_layers):
-            D, I = token_metrics["faiss_results"][selected_token][layer]
+            d, i = token_metrics["faiss_results"][selected_token][layer]
             similarities[f"layer {layer}"] = self.get_closest_vocabulary_tokens(
-                D, I, token_id, k=self.k
+                d, i, token_id, k=self.k
             )
 
         # Pad all columns to same length
@@ -263,8 +263,8 @@ class AttentionAnalyzer:
 
         tok_id = token_ids[pos].item()
         similarities = []
-        for D, I in faiss_results[pos]:
-            rank = (I[0] == tok_id).nonzero()[0].item()
-            similarity = D[0][rank]
+        for d, i in faiss_results[pos]:
+            rank = (i[0] == tok_id).nonzero()[0].item()
+            similarity = d[0][rank]
             similarities.append(similarity)
         return similarities

@@ -5,3 +5,4 @@ all_python_files_new.txt
 .envrc.venv/
 build/
 *egg-info/
+token_overlap_plot.png
