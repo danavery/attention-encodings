@@ -131,7 +131,3 @@ I believe these insights offer a fresh perspective on transformers and open up i
 ![Rankings and Similarity Table](./images/rankings-and-similarity-v2.png)
 ![Similarity across Layers](./images/similarity-across-layers.png)
 ![Rankings across Layers](./images/rankings-across-layers.png)
-
-## Installation
-
-Conda is required. Run `conda env create -f environment.yml [--name your_custom_name]` to create the environment. Then just start the UI with `python app.py`, and go to `localhost:7860` to see the demo.
