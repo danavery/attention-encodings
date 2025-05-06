@@ -2,15 +2,25 @@ import gradio as gr
 import matplotlib.pyplot as plt
 
 from attention_analyzer import AttentionAnalyzer
+from transformer_manager import TransformerManager
 
 
 class AttentionAnalyzerUI:
     def __init__(self, analyzer: AttentionAnalyzer):
+        self.setup(analyzer)
+
+    def setup(self, analyzer: AttentionAnalyzer):
         self.analyzer = analyzer
         self.k = analyzer.k
         self.num_layers = analyzer.num_layers
         self.sim_fig = None
         self.rank_fig = None
+
+    def change_model(self, text, selected_token, use_positional, model_name):
+        transformer = TransformerManager(model_name)
+        analyzer = AttentionAnalyzer(transformer)
+        self.setup(analyzer)
+        return(self.update_tabs(text, selected_token, use_positional))
 
     def get_intro_markdown(self):
         # read in README.md and strip out metadata if present
@@ -35,23 +45,14 @@ class AttentionAnalyzerUI:
             selected_token = 1
         selected_token = int(selected_token)
         token_metrics = self.analyzer.get_all_token_metrics(text, use_positional)
-        token_string, similarity_dataframe = (
-            self.analyzer.get_similarities_df(token_metrics, selected_token)
-        )
-
-        similarity_plot = self.create_similarity_plot(
-            token_metrics, selected_token
-        )
-        rank_plot = self.create_rank_plot(
+        token_string, similarity_dataframe = self.analyzer.get_similarities_df(
             token_metrics, selected_token
         )
 
-        return (
-            token_string,
-            similarity_dataframe,
-            similarity_plot,
-            rank_plot,
-        )
+        similarity_plot = self.create_similarity_plot(token_metrics, selected_token)
+        rank_plot = self.create_rank_plot(token_metrics, selected_token)
+        tokens = gr.Dataset(samples=self.analyzer.get_tokens_for_text(text))
+        return (token_string, similarity_dataframe, similarity_plot, rank_plot, tokens)
 
     def create_rank_plot(self, token_metrics, selected_token):
         if hasattr(self, "rank_fig"):
@@ -105,7 +106,9 @@ class AttentionAnalyzerUI:
             )
             token_string = token_metrics["token_strings"][pos]
             if pos == selected_token:
-                ax.plot(range(self.num_layers), similarities, "b-o", linewidth=2, label=token_string)
+                ax.plot(
+                    range(self.num_layers), similarities, "b-o", linewidth=2, label=token_string
+                )
             else:
                 ax.plot(range(self.num_layers), similarities, color="gray", alpha=0.3)
 
@@ -156,21 +159,22 @@ class AttentionAnalyzerUI:
                     value=True,
                     scale=0,
                 )
-            with gr.Row():
-                show_tokens = gr.Button(
-                    "Tokenize", elem_classes="get-tokens", size="sm", scale=0
+                model = gr.Dropdown(
+                    choices=["roberta-base", "roberta-large"],
+                    value="roberta-base",
+                    interactive=True,
                 )
+            with gr.Row():
+                show_tokens = gr.Button("Tokenize", elem_classes="get-tokens", size="sm", scale=0)
                 tokens = gr.Dataset(
                     components=["text"],
-                    samples=self.analyzer.get_tokens_for_text(initial_text),
+                    samples=[],
                     type="index",
                     label="Select a token from here to see its closest tokens after attention processing. Click one to see its neighbors below.",
                     scale=5,
                     samples_per_page=1000,
                 )
-                selected_token_str = gr.Textbox(
-                    label="Selected Token", show_label=True, scale=0
-                )
+                selected_token_str = gr.Textbox(label="Selected Token", show_label=True, scale=0)
 
             with gr.Tabs():
                 with gr.Tab("Similarity and Rankings"):
@@ -199,6 +203,7 @@ class AttentionAnalyzerUI:
                     similarity_dataframe,
                     similarity_plot,
                     rank_plot,
+                    tokens,
                 ],
             }
             tokens.click(
@@ -207,10 +212,16 @@ class AttentionAnalyzerUI:
             use_positional.change(**update_handler_params)
             demo.load(**update_handler_params)
 
-            show_tokens.click(
-                self.update_token_display, inputs=[text], outputs=[tokens]
-            )
+            show_tokens.click(self.update_token_display, inputs=[text], outputs=[tokens])
             text.submit(self.update_token_display, inputs=[text], outputs=[tokens])
+
+            model_change_params = {
+                "fn": self.change_model,
+                "inputs": update_handler_params["inputs"] + [model],
+                "outputs": update_handler_params["outputs"]
+            }
+            print(model_change_params)
+            model.change(**model_change_params)
 
             gr.Markdown(intro_markdown)
 

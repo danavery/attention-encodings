@@ -6,3 +6,4 @@ all_python_files_new.txt
 build/
 *egg-info/
 token_overlap_plot.png
+.vscode/settings.json
