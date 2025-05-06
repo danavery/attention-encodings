@@ -20,7 +20,7 @@ class AttentionAnalyzerUI:
         transformer = TransformerManager(model_name)
         analyzer = AttentionAnalyzer(transformer)
         self.setup(analyzer)
-        return(self.update_tabs(text, selected_token, use_positional))
+        return self.update_tabs(text, selected_token, use_positional)
 
     def get_intro_markdown(self):
         # read in README.md and strip out metadata if present
@@ -153,17 +153,20 @@ class AttentionAnalyzerUI:
                     label="Input text",
                 )
 
+                model = gr.Dropdown(
+                    choices=["roberta-base", "roberta-large"],
+                    value="roberta-base",
+                    label="Model",
+                    interactive=True,
+                )
+
                 use_positional = gr.Checkbox(
                     label="Use positional embeddings",
                     show_label=True,
                     value=True,
                     scale=0,
                 )
-                model = gr.Dropdown(
-                    choices=["roberta-base", "roberta-large"],
-                    value="roberta-base",
-                    interactive=True,
-                )
+
             with gr.Row():
                 show_tokens = gr.Button("Tokenize", elem_classes="get-tokens", size="sm", scale=0)
                 tokens = gr.Dataset(
@@ -218,7 +221,7 @@ class AttentionAnalyzerUI:
             model_change_params = {
                 "fn": self.change_model,
                 "inputs": update_handler_params["inputs"] + [model],
-                "outputs": update_handler_params["outputs"]
+                "outputs": update_handler_params["outputs"],
             }
             print(model_change_params)
             model.change(**model_change_params)

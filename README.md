@@ -1,10 +1,14 @@
-Current demo available [here](https://demo.danavery.com/attention-encodings).
-
 # Dense Paths and Sparse Trails: Token Encoding Journeys in a Transformer Model
 
-## Introduction
+Current demo available [here](https://demo.danavery.com/attention-encodings).
+
+**[2025-05-06: I've added the ability to switch models. At the moment the options are "roberta-base" and "roberta-large". Note that the layer-specific findings below are all based on "roberta-base".]**
+
+**[2025-04-29: A quick summary of the strangeness at layer 5 is [here](https://stuff.danavery.com/posts/2025-04-29-layer-5/).]**
 
 **[2025-04-22: I wrote a short post based on this demo on how three different metrics tell three very different stories about token movement in RoBERTa. Check it out [here](https://stuff.danavery.com/posts/2025-04-22-more-attention/).]**
+
+## Introduction
 
 This experiment provides an exploratory look into the transformation of individual sequence tokens across the attention layers of a pre-trained RoBERTa model. The focus is on understanding the immediate post-attention output for specific sequence positions and identifying the "nearest" vocabulary tokens in the value encoding space.
 
